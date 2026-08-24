@@ -1,50 +1,50 @@
 # Discord → NodeBB sync
 
-One source repository for both halves of the integration:
+One source repository, two runtime images:
 
-- `worker/` — reads Discord forum channels and sends normalized imports/sync updates to NodeBB.
-- `nodebb-plugin/` — runs inside NodeBB and creates users, categories, topics, posts and uploads while storing Discord↔NodeBB mappings.
+- `nodebb-plugin/` — native NodeBB plugin; creates users/categories/topics/posts/uploads and stores Discord↔NodeBB mappings through NodeBB's database layer.
+- `worker/` — Discord integration process.
 
-They are one product and are versioned in one Git history. A single commit publishes two images:
-
-```text
-ghcr.io/<owner>/discord-nodebb-sync-worker:<commit-sha>
-ghcr.io/<owner>/nodebb-with-discord-sync:<commit-sha>
-```
-
-`latest` is also published from `main`.
-
-## Repository layout
+Images:
 
 ```text
-worker/                 worker source, tests and fixtures
-nodebb-plugin/          NodeBB plugin source
-docker/                 NodeBB image entrypoint wrapper
-Dockerfile.worker       worker image
-Dockerfile.nodebb       NodeBB 4.15.1 + integration plugin image
-.github/workflows/      publishes both images to GHCR
+ghcr.io/nu31hackerspace/nodebb-with-discord-sync:<commit-sha>
+ghcr.io/nu31hackerspace/discord-nodebb-sync-worker:<commit-sha>
 ```
 
-## Local worker
+## Worker modes
+
+Historical import is explicit and one-shot:
 
 ```bash
-cp worker/.env.example worker/.env
-npm --prefix worker test
 npm --prefix worker run import
+```
+
+It enumerates active/archived Discord forum threads through the REST API and imports their complete message history.
+
+Realtime sync is event-driven:
+
+```bash
 npm --prefix worker run sync
 ```
 
-The worker and NodeBB plugin must use the same `DISCORD_SYNC_SECRET`.
+`sync` opens a Discord Gateway WebSocket connection through `discord.js` and listens for new messages in threads whose parent forum channel is listed in `DISCORD_CHANNEL_IDS`. It does not periodically rescan Discord and has no polling interval.
+
+Run the historical import once before realtime sync when migrating an existing forum archive. Both paths use the same idempotent NodeBB endpoint and mappings.
+
+## Environment
+
+```text
+DISCORD_BOT_TOKEN
+DISCORD_GUILD_ID
+DISCORD_CHANNEL_IDS
+NODEBB_URL
+DISCORD_SYNC_SECRET
+IMPORT_BOTS=false
+```
+
+The Discord application needs Guilds, Guild Messages and Message Content Gateway intents. The NodeBB plugin and worker must use the same `DISCORD_SYNC_SECRET`.
 
 ## Deployment
 
-Runtime deployment is kept in two independent repositories, matching the NU31 infra pattern:
-
-- `nodebb-deploy` deploys the custom NodeBB image (`official NodeBB 4.15.1 + bundled plugin`).
-- `discord-nodebb-sync-deploy` deploys the worker image.
-
-Both may deploy `latest`, but pinning both to the same source commit SHA is recommended when a change modifies the HTTP contract between worker and plugin.
-
-## Current scope
-
-Historical + repeated idempotent sync of Discord forum channels, users, display names, avatars, topics, replies, timestamps, images/files and reply references. Edits/deletes, reactions and reverse NodeBB→Discord sync are not implemented yet.
+Deployment is intentionally kept in one separate infrastructure repository: `nodebb-deploy`. That stack contains both NodeBB+plugin and the Discord worker. There is no third deploy repository.

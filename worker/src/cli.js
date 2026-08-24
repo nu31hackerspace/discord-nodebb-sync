@@ -5,13 +5,45 @@ const { config } = require('./config');
 const { DiscordApi } = require('./discord');
 const { NodeBBClient } = require('./nodebb');
 const { importChannel } = require('./runner');
+const { startGatewaySync } = require('./gateway');
 
-async function runOnce(cfg) {
-  if (!cfg.discordToken || !cfg.guildId || !cfg.channelIds.length || !cfg.secret) throw new Error('Set DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_CHANNEL_IDS and DISCORD_SYNC_SECRET');
-  const discord = new DiscordApi(cfg.discordToken); const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
-  await nodebb.health();
-  for (const channelId of cfg.channelIds) await importChannel({ discord, nodebb, guildId: cfg.guildId, channelId, importBots: cfg.importBots });
+function validateConfig(cfg) {
+  if (!cfg.discordToken || !cfg.guildId || !cfg.channelIds.length || !cfg.secret) {
+    throw new Error('Set DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_CHANNEL_IDS and DISCORD_SYNC_SECRET');
+  }
 }
+
+async function runImport(cfg) {
+  validateConfig(cfg);
+  const discord = new DiscordApi(cfg.discordToken);
+  const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
+  await nodebb.health();
+  for (const channelId of cfg.channelIds) {
+    await importChannel({ discord, nodebb, guildId: cfg.guildId, channelId, importBots: cfg.importBots });
+  }
+}
+
+async function runGateway(cfg) {
+  validateConfig(cfg);
+  const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
+  await nodebb.health();
+  const client = await startGatewaySync({
+    token: cfg.discordToken,
+    guildId: cfg.guildId,
+    channelIds: cfg.channelIds,
+    nodebb,
+    importBots: cfg.importBots,
+  });
+
+  const shutdown = async (signal) => {
+    console.log(`${signal}: closing Discord Gateway connection`);
+    client.destroy();
+    process.exit(0);
+  };
+  process.once('SIGINT', () => void shutdown('SIGINT'));
+  process.once('SIGTERM', () => void shutdown('SIGTERM'));
+}
+
 function applyArgs(cfg, args) {
   for (let i = 0; i < args.length; i++) {
     if (args[i] === '--channel' && args[i + 1]) cfg.channelIds = args[++i].split(',').map(x => x.trim()).filter(Boolean);
@@ -21,15 +53,17 @@ function applyArgs(cfg, args) {
 }
 
 async function main() {
-  const cmd = process.argv[2] || 'import'; const cfg = applyArgs(config(), process.argv.slice(3));
+  const cmd = process.argv[2] || 'import';
+  const cfg = applyArgs(config(), process.argv.slice(3));
   if (cmd === 'fixture') {
-    const file = process.argv[3]; if (!file) throw new Error('Usage: node src/cli.js fixture <payload.json>');
-    const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret); console.log(await nodebb.importThread(JSON.parse(fs.readFileSync(file, 'utf8')))); return;
+    const file = process.argv[3];
+    if (!file) throw new Error('Usage: node src/cli.js fixture <payload.json>');
+    const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
+    console.log(await nodebb.importThread(JSON.parse(fs.readFileSync(file, 'utf8'))));
+    return;
   }
-  if (cmd === 'import') return runOnce(cfg);
-  if (cmd === 'sync') {
-    for (;;) { try { await runOnce(cfg); } catch (e) { console.error(e.stack || e); } await new Promise(r => setTimeout(r, cfg.syncIntervalSeconds * 1000)); }
-  }
+  if (cmd === 'import') return runImport(cfg);
+  if (cmd === 'sync') return runGateway(cfg);
   throw new Error(`Unknown command: ${cmd}`);
 }
 main().catch(e => { console.error(e.stack || e); process.exitCode = 1; });

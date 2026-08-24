@@ -12,5 +12,8 @@
   },
   "engines": {
     "node": ">=22"
+  },
+  "dependencies": {
+    "discord.js": "^14.25.1"
   }
 }

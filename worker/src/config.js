@@ -25,7 +25,6 @@ function config() {
     channelIds: (process.env.DISCORD_CHANNEL_IDS || '').split(',').map(s => s.trim()).filter(Boolean),
     nodebbUrl: (process.env.NODEBB_URL || 'http://127.0.0.1:4567').replace(/\/$/, ''),
     secret: process.env.DISCORD_SYNC_SECRET || '',
-    syncIntervalSeconds: Math.max(10, Number(process.env.SYNC_INTERVAL_SECONDS || 30)),
     importBots: /^(1|true|yes)$/i.test(process.env.IMPORT_BOTS || 'false'),
   };
 }
