@@ -1,0 +1,10 @@
+FROM ghcr.io/nodebb/nodebb:4.15.1
+
+USER root
+COPY --chown=nodebb:nodebb nodebb-plugin /opt/nodebb-plugin-discord-sync
+COPY --chmod=755 docker/nodebb-entrypoint-wrapper.sh /usr/local/bin/nodebb-discord-sync-entrypoint
+
+USER nodebb
+RUN npm install --omit=dev /opt/nodebb-plugin-discord-sync
+
+ENTRYPOINT ["tini", "--", "nodebb-discord-sync-entrypoint"]

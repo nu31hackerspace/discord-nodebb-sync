@@ -1,14 +1,10 @@
 {
-  "name": "discord-nodebb-sync",
-  "version": "0.1.0",
+  "name": "discord-nodebb-sync-monorepo",
   "private": true,
-  "description": "Import and synchronize Discord forum channels into NodeBB",
-  "type": "commonjs",
   "scripts": {
-    "test": "node --test",
-    "import": "node src/cli.js import",
-    "sync": "node src/cli.js sync",
-    "fixture": "node src/cli.js fixture fixtures/sample-thread.json"
-  },
-  "engines": { "node": ">=22" }
+    "test": "npm --prefix worker test",
+    "import": "npm --prefix worker run import",
+    "sync": "npm --prefix worker run sync",
+    "fixture": "npm --prefix worker run fixture"
+  }
 }
