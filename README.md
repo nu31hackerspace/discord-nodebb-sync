@@ -38,10 +38,10 @@ The worker and NodeBB plugin must use the same `DISCORD_SYNC_SECRET`.
 
 ## Deployment
 
-Deployment is intentionally not kept here. Use two independent deployment repositories:
+Runtime deployment is kept in two independent repositories, matching the NU31 infra pattern:
 
-- `nodebb-deploy` deploys `nodebb-with-discord-sync`.
-- `discord-nodebb-sync-deploy` deploys `discord-nodebb-sync-worker`.
+- `nodebb-deploy` deploys the custom NodeBB image (`official NodeBB 4.15.1 + bundled plugin`).
+- `discord-nodebb-sync-deploy` deploys the worker image.
 
 Both may deploy `latest`, but pinning both to the same source commit SHA is recommended when a change modifies the HTTP contract between worker and plugin.
 
