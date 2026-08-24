@@ -1,0 +1,8 @@
+{
+  "id": "nodebb-plugin-discord-sync",
+  "name": "Discord Forum Sync",
+  "description": "Imports Discord forum threads into NodeBB with preserved users and timestamps.",
+  "hooks": [
+    { "hook": "static:app.load", "method": "init" }
+  ]
+}

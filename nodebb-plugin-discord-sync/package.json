@@ -1,0 +1,9 @@
+{
+  "name": "nodebb-plugin-discord-sync",
+  "version": "0.1.0",
+  "description": "NodeBB import endpoint for discord-nodebb-sync",
+  "main": "library.js",
+  "license": "MIT",
+  "engines": { "node": ">=22" },
+  "nbbpm": { "compatibility": "^4.15.0" }
+}

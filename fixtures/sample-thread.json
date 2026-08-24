@@ -1,0 +1,29 @@
+{
+  "discordGuildId": "100000000000000001",
+  "discordChannelId": "200000000000000002",
+  "channelName": "projects",
+  "discordThreadId": "300000000000000003",
+  "title": "Test imported project",
+  "createdTimestamp": 1735689600000,
+  "archived": false,
+  "messages": [
+    {
+      "discordMessageId": "300000000000000003",
+      "timestamp": 1735689600000,
+      "editedTimestamp": null,
+      "content": "First Discord forum post.",
+      "replyToDiscordMessageId": null,
+      "author": { "discordUserId": "400000000000000004", "displayName": "Alice", "avatarUrl": null, "bot": false },
+      "attachments": []
+    },
+    {
+      "discordMessageId": "500000000000000005",
+      "timestamp": 1735689660000,
+      "editedTimestamp": null,
+      "content": "Reply from Discord.",
+      "replyToDiscordMessageId": "300000000000000003",
+      "author": { "discordUserId": "600000000000000006", "displayName": "Bob", "avatarUrl": null, "bot": false },
+      "attachments": []
+    }
+  ]
+}
