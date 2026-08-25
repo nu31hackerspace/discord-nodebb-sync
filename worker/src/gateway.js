@@ -1,6 +1,6 @@
 'use strict';
 
-const { Client, GatewayIntentBits, ChannelType, PermissionFlagsBits } = require('discord.js');
+const { Client, GatewayIntentBits, ChannelType, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { normalizeThread } = require('./normalize');
 const { importChannel } = require('./runner');
 
@@ -112,16 +112,16 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
 
       if (!interaction.isChatInputCommand() || interaction.commandName !== 'forum-sync') return;
       if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
-        await interaction.reply({ content: 'This command is available only to server administrators.', ephemeral: true });
+        await interaction.reply({ content: 'This command is available only to server administrators.', flags: MessageFlags.Ephemeral });
         return;
       }
       const channel = interaction.options.getChannel('channel', true);
       if (channel.type !== ChannelType.GuildForum) {
-        await interaction.reply({ content: 'The selected channel must be a Discord forum channel.', ephemeral: true });
+        await interaction.reply({ content: 'The selected channel must be a Discord forum channel.', flags: MessageFlags.Ephemeral });
         return;
       }
 
-      await interaction.deferReply({ ephemeral: true });
+      await interaction.reply({ content: 'Syncing…', flags: MessageFlags.Ephemeral });
       const categoryValue = interaction.options.getString('category');
       const configured = await nodebb.configureChannel({
         discordGuildId: String(guildId),
@@ -131,12 +131,12 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
       });
       if (!discordApi) throw new Error('Discord REST API client is not configured for historical import');
       const summary = await importChannel({ discord: discordApi, nodebb, guildId, channelId: channel.id, importBots, log });
-      await interaction.editReply(`Synchronization enabled for #${channel.name}. NodeBB cid=${configured.cid}. Imported ${summary.threads} topic(s), ${summary.messages} message(s).`);
+      await interaction.editReply(`Ready. #${channel.name} → NodeBB cid=${configured.cid}. Imported ${summary.threads} topic(s), ${summary.messages} message(s).`);
     } catch (error) {
       log.error(`Discord interaction failed: ${error.stack || error}`);
       const message = `Synchronization failed: ${error.message}`;
       if (interaction.deferred || interaction.replied) await interaction.editReply(message).catch(() => {});
-      else if (interaction.isRepliable?.()) await interaction.reply({ content: message, ephemeral: true }).catch(() => {});
+      else if (interaction.isRepliable?.()) await interaction.reply({ content: message, flags: MessageFlags.Ephemeral }).catch(() => {});
     }
   });
 
