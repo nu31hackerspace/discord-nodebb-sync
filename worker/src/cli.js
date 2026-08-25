@@ -8,13 +8,18 @@ const { importChannel } = require('./runner');
 const { startGatewaySync } = require('./gateway');
 
 function validateConfig(cfg) {
-  if (!cfg.discordToken || !cfg.guildId || !cfg.channelIds.length || !cfg.secret) {
-    throw new Error('Set DISCORD_BOT_TOKEN, DISCORD_GUILD_ID, DISCORD_CHANNEL_IDS and DISCORD_SYNC_SECRET');
+  if (!cfg.discordToken || !cfg.guildId || !cfg.secret) {
+    throw new Error('Set DISCORD_BOT_TOKEN, DISCORD_GUILD_ID and DISCORD_SYNC_SECRET');
   }
 }
 
-async function runImport(cfg) {
+function validateImportConfig(cfg) {
   validateConfig(cfg);
+  if (!cfg.channelIds.length) throw new Error('Pass at least one Discord forum channel with --channel');
+}
+
+async function runImport(cfg) {
+  validateImportConfig(cfg);
   const discord = new DiscordApi(cfg.discordToken);
   const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
   await nodebb.health();
@@ -27,11 +32,13 @@ async function runGateway(cfg) {
   validateConfig(cfg);
   const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
   await nodebb.health();
+  const discord = new DiscordApi(cfg.discordToken);
   const client = await startGatewaySync({
     token: cfg.discordToken,
     guildId: cfg.guildId,
     channelIds: cfg.channelIds,
     nodebb,
+    discordApi: discord,
     importBots: cfg.importBots,
   });
 

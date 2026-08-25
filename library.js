@@ -15,7 +15,24 @@ plugin.init = async function ({ router }) {
   const importer = createImporter({ db, User, Topics, Categories, assets });
   const auth = createAuth();
   const json = express.json({ limit: '25mb' });
+
   router.get('/api/discord-sync/v1/health', auth, (req, res) => res.json({ ok: true, plugin: 'nodebb-plugin-discord-sync', version: '0.1.0' }));
+
+  router.get('/api/discord-sync/v1/categories', auth, async (req, res) => {
+    try { res.json({ categories: await importer.listCategories() }); }
+    catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
+  });
+
+  router.get('/api/discord-sync/v1/channels', auth, async (req, res) => {
+    try { res.json({ channels: await importer.listSyncChannels() }); }
+    catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
+  });
+
+  router.post('/api/discord-sync/v1/channel', auth, json, async (req, res) => {
+    try { res.json(await importer.configureChannel(req.body)); }
+    catch (e) { console.error('[discord-sync]', e); res.status(400).json({ error: e.message }); }
+  });
+
   router.post('/api/discord-sync/v1/thread', auth, json, async (req, res) => {
     try { res.json(await importer.importThread(req.body)); }
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }

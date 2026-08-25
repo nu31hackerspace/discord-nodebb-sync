@@ -1,7 +1,8 @@
 'use strict';
 
-const { Client, GatewayIntentBits } = require('discord.js');
+const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
 const { normalizeThread } = require('./normalize');
+const { importChannel } = require('./runner');
 
 function discordJsMessageToApi(message) {
   return {
@@ -16,13 +17,8 @@ function discordJsMessageToApi(message) {
       avatar: message.author.avatar || null,
       bot: Boolean(message.author.bot),
     },
-    member: message.member ? {
-      nick: message.member.nickname || null,
-      avatar: message.member.avatar || null,
-    } : null,
-    message_reference: message.reference?.messageId ? {
-      message_id: String(message.reference.messageId),
-    } : null,
+    member: message.member ? { nick: message.member.nickname || null, avatar: message.member.avatar || null } : null,
+    message_reference: message.reference?.messageId ? { message_id: String(message.reference.messageId) } : null,
     attachments: [...message.attachments.values()].map(attachment => ({
       id: String(attachment.id),
       filename: attachment.name || `attachment-${attachment.id}`,
@@ -48,22 +44,101 @@ function threadToApi(thread) {
   };
 }
 
-async function startGatewaySync({ token, guildId, channelIds, nodebb, importBots = false, log = console }) {
+function forumSyncCommand() {
+  return {
+    name: 'forum-sync',
+    description: 'Synchronize a Discord forum channel with NodeBB',
+    options: [
+      {
+        type: 7,
+        name: 'channel',
+        description: 'Discord forum channel to synchronize',
+        required: true,
+        channel_types: [ChannelType.GuildForum],
+      },
+      {
+        type: 3,
+        name: 'category',
+        description: 'Existing NodeBB category; omit to create one automatically',
+        required: false,
+        autocomplete: true,
+      },
+    ],
+  };
+}
+
+async function registerForumSyncCommand(guild) {
+  const commands = await guild.commands.fetch();
+  const existing = commands.find(command => command.name === 'forum-sync');
+  if (existing) return existing.edit(forumSyncCommand());
+  return guild.commands.create(forumSyncCommand());
+}
+
+async function startGatewaySync({ token, guildId, channelIds = [], nodebb, discordApi = null, importBots = false, log = console }) {
   const monitoredChannels = new Set(channelIds.map(String));
   const client = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent,
-    ],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   });
 
   client.once('ready', async () => {
-    log.log(`Discord Gateway connected as ${client.user.tag}; watching ${monitoredChannels.size} forum channel(s)`);
-    try { await nodebb.health(); } catch (error) { log.error(`NodeBB health check failed: ${error.message}`); }
+    try {
+      await nodebb.health();
+      const subscriptions = await nodebb.listSyncChannels();
+      for (const sub of subscriptions) {
+        if (!sub.guildId || String(sub.guildId) === String(guildId)) monitoredChannels.add(String(sub.discordChannelId));
+      }
+      const guild = await client.guilds.fetch(guildId);
+      await registerForumSyncCommand(guild);
+      log.log(`Discord Gateway connected as ${client.user.tag}; watching ${monitoredChannels.size} forum channel(s)`);
+    } catch (error) {
+      log.error(`Discord sync initialization failed: ${error.stack || error}`);
+    }
   });
 
-  client.on('messageCreate', async (message) => {
+  client.on('interactionCreate', async interaction => {
+    try {
+      if (String(interaction.guildId || '') !== String(guildId)) return;
+
+      if (interaction.isAutocomplete() && interaction.commandName === 'forum-sync' && interaction.options.getFocused(true).name === 'category') {
+        const focused = String(interaction.options.getFocused() || '').trim().toLocaleLowerCase();
+        const categories = await nodebb.listCategories();
+        const choices = categories
+          .filter(category => !focused || category.name.toLocaleLowerCase().includes(focused) || String(category.cid).includes(focused))
+          .slice(0, 25)
+          .map(category => ({ name: `${category.name} (cid:${category.cid})`.slice(0, 100), value: String(category.cid) }));
+        await interaction.respond(choices);
+        return;
+      }
+
+      if (!interaction.isChatInputCommand() || interaction.commandName !== 'forum-sync') return;
+      const channel = interaction.options.getChannel('channel', true);
+      if (channel.type !== ChannelType.GuildForum) {
+        await interaction.reply({ content: 'The selected channel must be a Discord forum channel.', ephemeral: true });
+        return;
+      }
+
+      await interaction.deferReply({ ephemeral: true });
+      const categoryValue = interaction.options.getString('category');
+      const configured = await nodebb.configureChannel({
+        discordGuildId: String(guildId),
+        discordChannelId: String(channel.id),
+        channelName: channel.name,
+        ...(categoryValue ? { cid: Number(categoryValue) } : {}),
+      });
+      monitoredChannels.add(String(channel.id));
+
+      if (!discordApi) throw new Error('Discord REST API client is not configured for historical import');
+      const summary = await importChannel({ discord: discordApi, nodebb, guildId, channelId: channel.id, importBots, log });
+      await interaction.editReply(`Synchronization enabled for #${channel.name}. NodeBB cid=${configured.cid}. Imported ${summary.threads} topic(s), ${summary.messages} message(s).`);
+    } catch (error) {
+      log.error(`Discord interaction failed: ${error.stack || error}`);
+      const message = `Synchronization failed: ${error.message}`;
+      if (interaction.deferred || interaction.replied) await interaction.editReply(message).catch(() => {});
+      else if (interaction.isRepliable?.()) await interaction.reply({ content: message, ephemeral: true }).catch(() => {});
+    }
+  });
+
+  client.on('messageCreate', async message => {
     try {
       if (String(message.guildId || '') !== String(guildId)) return;
       if (!message.channel?.isThread?.()) return;
@@ -93,7 +168,8 @@ async function startGatewaySync({ token, guildId, channelIds, nodebb, importBots
   client.on('warn', warning => log.warn(`Discord Gateway warning: ${warning}`));
 
   await client.login(token);
+  client.monitoredChannels = monitoredChannels;
   return client;
 }
 
-module.exports = { discordJsMessageToApi, threadToApi, startGatewaySync };
+module.exports = { discordJsMessageToApi, threadToApi, forumSyncCommand, registerForumSyncCommand, startGatewaySync };

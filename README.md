@@ -39,14 +39,13 @@ Realtime sync is event-driven:
 npm --prefix worker run sync
 ```
 
-`sync` opens a Discord Gateway WebSocket connection through `discord.js` and listens for new messages in threads whose parent forum channel is listed in `DISCORD_CHANNEL_IDS`.
+`sync` opens a Discord Gateway WebSocket connection through `discord.js`. Realtime forum channels are loaded from persistent subscriptions stored by the NodeBB plugin and are added with `/forum-sync`.
 
 ## Environment
 
 ```text
 DISCORD_BOT_TOKEN
 DISCORD_GUILD_ID
-DISCORD_CHANNEL_IDS
 NODEBB_URL
 DISCORD_SYNC_SECRET
 IMPORT_BOTS=false
@@ -77,3 +76,28 @@ Build the worker image locally:
 ```bash
 docker build -f worker/Dockerfile worker
 ```
+
+## Discord slash command
+
+The worker registers one guild slash command:
+
+```text
+/forum-sync channel:<Discord forum channel> category:<optional NodeBB category>
+```
+
+`category` uses Discord autocomplete backed by NodeBB. The visible choice contains the category name and `cid`; the stored mapping uses the numeric `cid`, not the category name.
+
+If `category` is omitted, the plugin creates a NodeBB category immediately using the Discord channel name. This happens before historical messages are scanned, so an empty Discord forum channel still gets a NodeBB category and a persistent sync subscription.
+
+If `category` is supplied, the plugin binds the Discord channel to that existing NodeBB category. A category already mapped to another Discord channel is rejected.
+
+Sync subscriptions and mappings are stored through NodeBB's database abstraction, including:
+
+```text
+discord channel id <-> NodeBB cid
+discord thread id  -> NodeBB tid
+discord message id -> NodeBB pid
+discord user id    -> NodeBB uid
+```
+
+At worker startup, enabled channel subscriptions are loaded from NodeBB. Realtime sync state is not configured through environment variables.
