@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createImporter } = require('../../nodebb-plugin/lib/importer');
+const { createImporter } = require('../../lib/importer');
 
 function harness() {
   const objects = new Map(); let nextUid = 10, nextCid = 20, nextTid = 30, nextPid = 40;
@@ -37,7 +37,7 @@ test('second import is idempotent', async () => {
 });
 
 test('sanitizes unsupported username characters while keeping import possible', async () => {
-  const { safeUsername } = require('../../nodebb-plugin/lib/importer');
+  const { safeUsername } = require('../../lib/importer');
   assert.equal(safeUsername('Alice 🚀', '77'), 'Alice');
   assert.equal(safeUsername('🚀', '77'), 'discord-77');
 });

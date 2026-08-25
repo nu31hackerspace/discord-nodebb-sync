@@ -1,18 +1,31 @@
-# Discord → NodeBB sync
+# Discord -> NodeBB Sync
 
-One source repository, two runtime images:
+Public source repository for one NodeBB plugin and its Discord worker.
 
-- `nodebb-plugin/` — native NodeBB plugin; creates users/categories/topics/posts/uploads and stores Discord↔NodeBB mappings through NodeBB's database layer.
-- `worker/` — Discord integration process.
-
-Images:
+## Layout
 
 ```text
-ghcr.io/nu31hackerspace/nodebb-with-discord-sync:<commit-sha>
-ghcr.io/nu31hackerspace/discord-nodebb-sync-worker:<commit-sha>
+package.json      # NodeBB plugin package
+plugin.json       # NodeBB plugin manifest
+library.js        # NodeBB plugin entrypoint
+lib/              # plugin implementation
+worker/           # Discord worker package and image
 ```
 
-## Worker modes
+The repository root is the npm package `nodebb-plugin-discord-sync`. NodeBB must install this package inside its own container; the plugin is not a separate service.
+
+The worker is separate. It reads Discord forum channels and sends normalized thread payloads to the plugin HTTP endpoint in NodeBB.
+
+## Plugin API
+
+```text
+GET  /api/discord-sync/v1/health
+POST /api/discord-sync/v1/thread
+```
+
+Both endpoints require the `x-discord-sync-secret` header matching `DISCORD_SYNC_SECRET`.
+
+## Worker Modes
 
 Historical import is explicit and one-shot:
 
@@ -20,17 +33,13 @@ Historical import is explicit and one-shot:
 npm --prefix worker run import
 ```
 
-It enumerates active/archived Discord forum threads through the REST API and imports their complete message history.
-
 Realtime sync is event-driven:
 
 ```bash
 npm --prefix worker run sync
 ```
 
-`sync` opens a Discord Gateway WebSocket connection through `discord.js` and listens for new messages in threads whose parent forum channel is listed in `DISCORD_CHANNEL_IDS`. It does not periodically rescan Discord and has no polling interval.
-
-Run the historical import once before realtime sync when migrating an existing forum archive. Both paths use the same idempotent NodeBB endpoint and mappings.
+`sync` opens a Discord Gateway WebSocket connection through `discord.js` and listens for new messages in threads whose parent forum channel is listed in `DISCORD_CHANNEL_IDS`.
 
 ## Environment
 
@@ -43,8 +52,28 @@ DISCORD_SYNC_SECRET
 IMPORT_BOTS=false
 ```
 
-The Discord application needs Guilds, Guild Messages and Message Content Gateway intents. The NodeBB plugin and worker must use the same `DISCORD_SYNC_SECRET`.
+The Discord application needs Guilds, Guild Messages and Message Content Gateway intents.
 
-## Deployment
+## Local Development
 
-Deployment is intentionally kept in one separate infrastructure repository: `nodebb-deploy`. That stack contains both NodeBB+plugin and the Discord worker. There is no third deploy repository.
+Local NodeBB/PostgreSQL deployment is owned by the sibling deploy repository:
+
+```bash
+cd ../nodebb-deploy
+cp .env.dev.example .env.dev
+docker compose --env-file .env.dev -f docker-compose.dev.yml up --build nodebb
+```
+
+That compose file bind-mounts this repository into NodeBB as `nodebb-plugin-discord-sync`.
+
+Run worker tests from this repository:
+
+```bash
+npm test
+```
+
+Build the worker image locally:
+
+```bash
+docker build -f worker/Dockerfile worker
+```

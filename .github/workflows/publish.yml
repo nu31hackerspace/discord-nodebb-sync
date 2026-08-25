@@ -1,4 +1,4 @@
-name: Publish Discord NodeBB Sync images
+name: Publish Discord NodeBB Sync worker image
 
 on:
   push:
@@ -10,20 +10,11 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
-  build-and-push-images:
+  build-and-push-worker:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
-    strategy:
-      matrix:
-        include:
-          - name: worker
-            image: discord-nodebb-sync-worker
-            dockerfile: Dockerfile.worker
-          - name: nodebb
-            image: nodebb-with-discord-sync
-            dockerfile: Dockerfile.nodebb
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,12 +32,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build and push ${{ matrix.name }} image
+      - name: Build and push worker image
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: ./${{ matrix.dockerfile }}
+          context: ./worker
+          file: ./worker/Dockerfile
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ steps.prep.outputs.owner_lc }}/${{ matrix.image }}:latest
-            ${{ env.REGISTRY }}/${{ steps.prep.outputs.owner_lc }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ steps.prep.outputs.owner_lc }}/discord-nodebb-sync-worker:latest
+            ${{ env.REGISTRY }}/${{ steps.prep.outputs.owner_lc }}/discord-nodebb-sync-worker:${{ github.sha }}

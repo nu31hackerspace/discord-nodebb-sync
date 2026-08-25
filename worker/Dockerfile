@@ -1,10 +1,10 @@
 FROM node:22-alpine
 
 WORKDIR /app
-COPY worker/package.json ./package.json
+COPY package.json ./package.json
 RUN npm install --omit=dev --no-audit --no-fund
-COPY worker/src ./src
-COPY worker/fixtures ./fixtures
+COPY src ./src
+COPY fixtures ./fixtures
 
 USER node
 CMD ["node", "src/cli.js", "sync"]
