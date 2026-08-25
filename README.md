@@ -65,29 +65,29 @@ cd ../nodebb-deploy
 Start NodeBB + PostgreSQL:
 
 ```bash
-docker compose --env-file .env.dev -f docker-compose.dev.yml up -d --build nodebb
+docker compose -f docker-compose.dev.yml up -d --build nodebb
 ```
 
 Start or rebuild/recreate the worker:
 
 ```bash
-docker compose --env-file .env.dev -f docker-compose.dev.yml --profile sync up -d --build discord_worker
+docker compose -f docker-compose.dev.yml --profile sync up -d --build discord_worker
 ```
 
 Restart the worker without rebuilding:
 
 ```bash
-docker compose --env-file .env.dev -f docker-compose.dev.yml restart discord_worker
+docker compose -f docker-compose.dev.yml restart discord_worker
 ```
 
 Follow worker logs:
 
 ```bash
-docker compose --env-file .env.dev -f docker-compose.dev.yml logs -f --tail=100 discord_worker
+docker compose -f docker-compose.dev.yml logs -f --tail=100 discord_worker
 ```
 
 After changing backend plugin code, restart NodeBB:
 
 ```bash
-docker compose --env-file .env.dev -f docker-compose.dev.yml restart nodebb
+docker compose -f docker-compose.dev.yml restart nodebb
 ```
