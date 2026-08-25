@@ -31,6 +31,15 @@ class NodeBBClient {
     return data.channels || [];
   }
 
+  async getSyncChannel(discordChannelId) {
+    try {
+      return await this.request(`/api/discord-sync/v1/channel/${encodeURIComponent(String(discordChannelId))}`);
+    } catch (error) {
+      if (/NodeBB 404:/.test(error.message)) return null;
+      throw error;
+    }
+  }
+
   health() { return this.request('/api/discord-sync/v1/health'); }
 }
 module.exports = { NodeBBClient };

@@ -100,4 +100,4 @@ discord message id -> NodeBB pid
 discord user id    -> NodeBB uid
 ```
 
-At worker startup, enabled channel subscriptions are loaded from NodeBB. Realtime sync state is not configured through environment variables.
+The worker does not cache the synchronized-channel list in memory. For each Discord event it performs a point lookup against the NodeBB plugin by Discord channel ID and processes the event only when that persistent subscription is enabled. Realtime sync state is not configured through environment variables.

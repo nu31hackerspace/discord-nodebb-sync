@@ -28,6 +28,14 @@ plugin.init = async function ({ router }) {
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
 
+  router.get('/api/discord-sync/v1/channel/:discordChannelId', auth, async (req, res) => {
+    try {
+      const channel = await importer.getSyncChannel(req.params.discordChannelId);
+      if (!channel) return res.status(404).json({ error: 'channel subscription not found' });
+      res.json(channel);
+    } catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
+  });
+
   router.post('/api/discord-sync/v1/channel', auth, json, async (req, res) => {
     try { res.json(await importer.configureChannel(req.body)); }
     catch (e) { console.error('[discord-sync]', e); res.status(400).json({ error: e.message }); }

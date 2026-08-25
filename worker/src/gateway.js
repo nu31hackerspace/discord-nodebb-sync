@@ -74,8 +74,7 @@ async function registerForumSyncCommand(guild) {
   return guild.commands.create(forumSyncCommand());
 }
 
-async function startGatewaySync({ token, guildId, channelIds = [], nodebb, discordApi = null, importBots = false, log = console }) {
-  const monitoredChannels = new Set(channelIds.map(String));
+async function startGatewaySync({ token, guildId, nodebb, discordApi = null, importBots = false, log = console }) {
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent],
   });
@@ -83,13 +82,9 @@ async function startGatewaySync({ token, guildId, channelIds = [], nodebb, disco
   client.once('ready', async () => {
     try {
       await nodebb.health();
-      const subscriptions = await nodebb.listSyncChannels();
-      for (const sub of subscriptions) {
-        if (!sub.guildId || String(sub.guildId) === String(guildId)) monitoredChannels.add(String(sub.discordChannelId));
-      }
       const guild = await client.guilds.fetch(guildId);
       await registerForumSyncCommand(guild);
-      log.log(`Discord Gateway connected as ${client.user.tag}; watching ${monitoredChannels.size} forum channel(s)`);
+      log.log(`Discord Gateway connected as ${client.user.tag}; synchronization state is resolved from NodeBB per event`);
     } catch (error) {
       log.error(`Discord sync initialization failed: ${error.stack || error}`);
     }
@@ -125,8 +120,6 @@ async function startGatewaySync({ token, guildId, channelIds = [], nodebb, disco
         channelName: channel.name,
         ...(categoryValue ? { cid: Number(categoryValue) } : {}),
       });
-      monitoredChannels.add(String(channel.id));
-
       if (!discordApi) throw new Error('Discord REST API client is not configured for historical import');
       const summary = await importChannel({ discord: discordApi, nodebb, guildId, channelId: channel.id, importBots, log });
       await interaction.editReply(`Synchronization enabled for #${channel.name}. NodeBB cid=${configured.cid}. Imported ${summary.threads} topic(s), ${summary.messages} message(s).`);
@@ -142,7 +135,9 @@ async function startGatewaySync({ token, guildId, channelIds = [], nodebb, disco
     try {
       if (String(message.guildId || '') !== String(guildId)) return;
       if (!message.channel?.isThread?.()) return;
-      if (!monitoredChannels.has(String(message.channel.parentId || ''))) return;
+      const subscription = await nodebb.getSyncChannel(String(message.channel.parentId || ''));
+      if (!subscription?.enabled) return;
+      if (subscription.guildId && String(subscription.guildId) !== String(guildId)) return;
       if (!importBots && message.author?.bot) return;
 
       const parent = message.channel.parent || await message.guild.channels.fetch(message.channel.parentId);
@@ -168,7 +163,6 @@ async function startGatewaySync({ token, guildId, channelIds = [], nodebb, disco
   client.on('warn', warning => log.warn(`Discord Gateway warning: ${warning}`));
 
   await client.login(token);
-  client.monitoredChannels = monitoredChannels;
   return client;
 }
 

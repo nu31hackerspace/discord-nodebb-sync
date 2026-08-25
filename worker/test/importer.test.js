@@ -100,3 +100,23 @@ test('listCategories returns NodeBB category ids and names', async () => {
     { cid: 20, name: 'Zulu' },
   ]);
 });
+
+test('getSyncChannel returns persistent subscription state for a configured channel', async () => {
+  const h = harness();
+  const configured = await h.importer.configureChannel({ discordGuildId: 'g1', discordChannelId: 'c1', channelName: 'Projects' });
+  assert.deepEqual(await h.importer.getSyncChannel('c1'), {
+    discordChannelId: 'c1',
+    guildId: 'g1',
+    channelName: 'Projects',
+    cid: configured.cid,
+    enabled: true,
+  });
+});
+
+test('getSyncChannel returns null for an unknown channel and reflects disabled state', async () => {
+  const h = harness();
+  assert.equal(await h.importer.getSyncChannel('missing'), null);
+  await h.importer.configureChannel({ discordGuildId: 'g1', discordChannelId: 'c1', channelName: 'Projects' });
+  h.objects.set('discord-sync:subscription:c1', { ...h.objects.get('discord-sync:subscription:c1'), enabled: 0 });
+  assert.equal((await h.importer.getSyncChannel('c1')).enabled, false);
+});

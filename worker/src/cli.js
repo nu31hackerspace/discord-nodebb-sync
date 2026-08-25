@@ -36,7 +36,6 @@ async function runGateway(cfg) {
   const client = await startGatewaySync({
     token: cfg.discordToken,
     guildId: cfg.guildId,
-    channelIds: cfg.channelIds,
     nodebb,
     discordApi: discord,
     importBots: cfg.importBots,
