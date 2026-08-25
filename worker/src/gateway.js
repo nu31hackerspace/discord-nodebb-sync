@@ -131,7 +131,7 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
       });
       if (!discordApi) throw new Error('Discord REST API client is not configured for historical import');
       const summary = await importChannel({ discord: discordApi, nodebb, guildId, channelId: channel.id, importBots, log });
-      await interaction.editReply(`Ready. #${channel.name} → NodeBB cid=${configured.cid}. Imported ${summary.threads} topic(s), ${summary.messages} message(s).`);
+      await interaction.editReply(`Ready. #${channel.name} → ${configured.categoryName}\nImported ${summary.threads} topic(s), ${summary.messages} message(s).`);
     } catch (error) {
       log.error(`Discord interaction failed: ${error.stack || error}`);
       const message = `Synchronization failed: ${error.message}`;

@@ -67,6 +67,7 @@ test('configureChannel creates a NodeBB category even when there are no Discord 
   assert.equal(h.categories.length, 1);
   assert.equal(h.categories[0].name, 'Empty forum');
   assert.equal(result.cid, h.categories[0].cid);
+  assert.equal(result.categoryName, 'Empty forum');
   const channels = await h.importer.listSyncChannels();
   assert.deepEqual(channels, [{ discordChannelId: 'empty', guildId: 'g1', channelName: 'Empty forum', cid: result.cid }]);
 });
@@ -78,6 +79,7 @@ test('configureChannel can bind a Discord channel to an existing NodeBB category
   h.objects.delete(`discord-sync:category:${existing}`);
   const result = await h.importer.configureChannel({ discordGuildId: 'g1', discordChannelId: 'c2', channelName: 'Discord name', cid: existing });
   assert.equal(result.cid, existing);
+  assert.equal(result.categoryName, 'Existing');
   assert.equal(h.categories.length, 1);
   assert.equal(h.objects.get('discord-sync:channel:c2').cid, existing);
 });
