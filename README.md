@@ -1,48 +1,42 @@
-# Discord -> NodeBB Sync
+# Discord → NodeBB Sync
 
-Public source repository for one NodeBB plugin and its Discord worker.
+NodeBB plugin + Discord worker for importing and synchronizing Discord forum channels with NodeBB.
 
-## Layout
-
-```text
-package.json      # NodeBB plugin package
-plugin.json       # NodeBB plugin manifest
-library.js        # NodeBB plugin entrypoint
-lib/              # plugin implementation
-worker/           # Discord worker package and image
-```
-
-The repository root is the npm package `nodebb-plugin-discord-sync`. NodeBB must install this package inside its own container; the plugin is not a separate service.
-
-The worker is separate. It reads Discord forum channels and sends normalized thread payloads to the plugin HTTP endpoint in NodeBB.
-
-## Plugin API
+## Structure
 
 ```text
-GET  /api/discord-sync/v1/health
-POST /api/discord-sync/v1/thread
+library.js        NodeBB plugin entrypoint
+lib/              plugin code
+plugin.json       NodeBB plugin manifest
+worker/           Discord worker
 ```
 
-Both endpoints require the `x-discord-sync-secret` header matching `DISCORD_SYNC_SECRET`.
+The plugin runs inside NodeBB. The worker is a separate container/process.
 
-## Worker Modes
+## Discord command
 
-Historical import is explicit and one-shot:
-
-```bash
-npm --prefix worker run import
+```text
+/forum-sync channel:<Discord forum channel> category:<optional NodeBB category> enabled:<true|false>
 ```
 
-Realtime sync is event-driven:
+Only Discord administrators can see and run the command.
 
-```bash
-npm --prefix worker run sync
+If `category` is omitted, NodeBB creates a category immediately using the Discord channel name, even when the Discord channel is empty. If a category is selected, the channel is bound to its numeric NodeBB `cid`; later renaming does not break the mapping.
+
+Mappings and sync state are stored through NodeBB's database abstraction:
+
+```text
+Discord channel id <-> NodeBB cid
+Discord thread id  <-> NodeBB tid
+Discord message id <-> NodeBB pid
+Discord user id    <-> NodeBB uid
 ```
 
-`sync` opens a Discord Gateway WebSocket connection through `discord.js`. Realtime forum channels are loaded from persistent subscriptions stored by the NodeBB plugin and are added with `/forum-sync`.
-The command is registered with Discord's `Administrator` default member permission and is hidden from non-admin members in the command picker. The worker also verifies the Administrator permission at interaction time.
+The worker does not keep the synchronized-channel list in memory. For every relevant Discord event it asks the NodeBB plugin whether that channel is enabled.
 
 ## Environment
+
+Worker:
 
 ```text
 DISCORD_BOT_TOKEN
@@ -52,53 +46,48 @@ DISCORD_SYNC_SECRET
 IMPORT_BOTS=false
 ```
 
-The Discord application needs Guilds, Guild Messages and Message Content Gateway intents.
+The Discord application needs the Guilds, Guild Messages and Message Content intents.
 
-## Local Development
-
-Local NodeBB/PostgreSQL deployment is owned by the sibling deploy repository:
-
-```bash
-cd ../nodebb-deploy
-cp .env.dev.example .env.dev
-docker compose --env-file .env.dev -f docker-compose.dev.yml up --build nodebb
-```
-
-That compose file bind-mounts this repository into NodeBB as `nodebb-plugin-discord-sync`.
-
-Run worker tests from this repository:
+## Tests
 
 ```bash
 npm test
 ```
 
-Build the worker image locally:
+## Local Docker development
+
+Local NodeBB, PostgreSQL and the worker are managed from the sibling `nodebb-deploy` repository. Do not run a standalone `docker build` for normal development.
 
 ```bash
-docker build -f worker/Dockerfile worker
+cd ../nodebb-deploy
 ```
 
-## Discord slash command
+Start NodeBB + PostgreSQL:
 
-The worker registers one guild slash command:
-
-```text
-/forum-sync channel:<Discord forum channel> category:<optional NodeBB category>
+```bash
+docker compose --env-file .env.dev -f docker-compose.dev.yml up -d --build nodebb
 ```
 
-`category` uses Discord autocomplete backed by NodeBB. The visible choice contains the category name and `cid`; the stored mapping uses the numeric `cid`, not the category name.
+Start or rebuild/recreate the worker:
 
-If `category` is omitted, the plugin creates a NodeBB category immediately using the Discord channel name. This happens before historical messages are scanned, so an empty Discord forum channel still gets a NodeBB category and a persistent sync subscription.
-
-If `category` is supplied, the plugin binds the Discord channel to that existing NodeBB category. A category already mapped to another Discord channel is rejected.
-
-Sync subscriptions and mappings are stored through NodeBB's database abstraction, including:
-
-```text
-discord channel id <-> NodeBB cid
-discord thread id  -> NodeBB tid
-discord message id -> NodeBB pid
-discord user id    -> NodeBB uid
+```bash
+docker compose --env-file .env.dev -f docker-compose.dev.yml --profile sync up -d --build discord_worker
 ```
 
-The worker does not cache the synchronized-channel list in memory. For each Discord event it performs a point lookup against the NodeBB plugin by Discord channel ID and processes the event only when that persistent subscription is enabled. Realtime sync state is not configured through environment variables.
+Restart the worker without rebuilding:
+
+```bash
+docker compose --env-file .env.dev -f docker-compose.dev.yml restart discord_worker
+```
+
+Follow worker logs:
+
+```bash
+docker compose --env-file .env.dev -f docker-compose.dev.yml logs -f --tail=100 discord_worker
+```
+
+After changing backend plugin code, restart NodeBB:
+
+```bash
+docker compose --env-file .env.dev -f docker-compose.dev.yml restart nodebb
+```
