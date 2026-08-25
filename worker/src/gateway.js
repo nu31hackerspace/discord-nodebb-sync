@@ -1,6 +1,6 @@
 'use strict';
 
-const { Client, GatewayIntentBits, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, ChannelType, PermissionFlagsBits } = require('discord.js');
 const { normalizeThread } = require('./normalize');
 const { importChannel } = require('./runner');
 
@@ -48,6 +48,7 @@ function forumSyncCommand() {
   return {
     name: 'forum-sync',
     description: 'Synchronize a Discord forum channel with NodeBB',
+    default_member_permissions: PermissionFlagsBits.Administrator.toString(),
     options: [
       {
         type: 7,
@@ -95,6 +96,10 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
       if (String(interaction.guildId || '') !== String(guildId)) return;
 
       if (interaction.isAutocomplete() && interaction.commandName === 'forum-sync' && interaction.options.getFocused(true).name === 'category') {
+        if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+          await interaction.respond([]);
+          return;
+        }
         const focused = String(interaction.options.getFocused() || '').trim().toLocaleLowerCase();
         const categories = await nodebb.listCategories();
         const choices = categories
@@ -106,6 +111,10 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
       }
 
       if (!interaction.isChatInputCommand() || interaction.commandName !== 'forum-sync') return;
+      if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+        await interaction.reply({ content: 'This command is available only to server administrators.', ephemeral: true });
+        return;
+      }
       const channel = interaction.options.getChannel('channel', true);
       if (channel.type !== ChannelType.GuildForum) {
         await interaction.reply({ content: 'The selected channel must be a Discord forum channel.', ephemeral: true });

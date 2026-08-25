@@ -40,6 +40,7 @@ npm --prefix worker run sync
 ```
 
 `sync` opens a Discord Gateway WebSocket connection through `discord.js`. Realtime forum channels are loaded from persistent subscriptions stored by the NodeBB plugin and are added with `/forum-sync`.
+The command is registered with Discord's `Administrator` default member permission and is hidden from non-admin members in the command picker. The worker also verifies the Administrator permission at interaction time.
 
 ## Environment
 
