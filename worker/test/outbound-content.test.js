@@ -48,12 +48,13 @@ test('NodeBB outbound content uses raw stored post content instead of rendered h
   assert.equal(body.content.includes('<p'), false);
 });
 
-test('only mapped NodeBB user mentions are converted to Discord user mentions', async () => {
+test('NodeBB mentions use Discord mentions when mapped and styled username fallback when unmapped', async () => {
   const h = mappingHarness();
   const User = {
     async getUidByUsername(username) {
       if (username === 'hackerspacer') return 7;
       if (username === 'localuser') return 8;
+      if (username === 'local_user') return 9;
       return 0;
     },
     async getUserField(uid, field) {
@@ -63,7 +64,7 @@ test('only mapped NodeBB user mentions are converted to Discord user mentions', 
   };
   const content = createNodeBBToDiscordContent({ Posts: null, User, mappings: { async getDiscordUserId(uid) { return uid === 7 ? '334835038093029' : null; } } });
   assert.equal(
-    await content.convertMentions('hi @hackerspacer and @localuser and @everyone'),
-    'hi <@334835038093029> and @localuser and @everyone',
+    await content.convertMentions('hi @hackerspacer and @localuser and @local_user and @everyone'),
+    'hi <@334835038093029> and ***localuser*** and ***local\\_user*** and @everyone',
   );
 });
