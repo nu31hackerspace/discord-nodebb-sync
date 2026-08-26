@@ -138,6 +138,7 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
         discordGuildId: String(guildId),
         discordChannelId: String(channel.id),
         channelName: channel.name,
+        channelDescription: channel.topic || '',
         ...(categoryValue ? { cid: Number(categoryValue) } : {}),
       });
       if (!discordApi) throw new Error('Discord REST API client is not configured for historical import');
@@ -165,7 +166,7 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
 
       const payload = normalizeThread(
         guildId,
-        { id: String(parent.id), name: parent.name },
+        { id: String(parent.id), name: parent.name, topic: parent.topic || '' },
         threadToApi(message.channel),
         [discordJsMessageToApi(message)],
         { importBots },

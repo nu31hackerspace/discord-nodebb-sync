@@ -48,9 +48,21 @@ function harness() {
     },
   };
   const Categories = {
-    async create(d) { const c = { cid: nextCid++, ...d }; categories.push(c); return c; },
+    async create(d) { const cid = nextCid++; const c = { cid, handle: String(d.name || `category-${cid}`).toLowerCase().replace(/\s+/g, '-'), ...d }; categories.push(c); return c; },
     async getCategories(cids) { return cids.map(cid => categories.find(c => Number(c.cid) === Number(cid)) || null); },
     async getAllCategories() { return [...categories]; },
+    async getCategoryField(cid, field) { return categories.find(c => Number(c.cid) === Number(cid))?.[field] ?? null; },
+    async generateHandle(handle) {
+      let candidate = handle; let suffix = 2;
+      while (categories.some(c => c.handle === candidate)) candidate = `${handle}-${suffix++}`;
+      return candidate;
+    },
+    async update(modified) {
+      for (const [cid, fields] of Object.entries(modified)) {
+        const category = categories.find(c => Number(c.cid) === Number(cid));
+        if (category) Object.assign(category, fields);
+      }
+    },
     async purge(cid) {
       const index = categories.findIndex(c => Number(c.cid) === Number(cid));
       if (index !== -1) categories.splice(index, 1);
@@ -64,7 +76,7 @@ function harness() {
   return { importer: createImporter({ db, User, Topics, Categories, assets }), objects, users, posts, categories };
 }
 const payload = {
-  discordChannelId: 'c1', channelName: 'Projects', discordThreadId: 't1', title: 'Build thing', messages: [
+  discordChannelId: 'c1', channelName: 'Projects', channelDescription: 'Project discussions', discordThreadId: 't1', title: 'Build thing', messages: [
     { discordMessageId: 'm1', timestamp: 1000, content: 'one', replyToDiscordMessageId: null, author: { discordUserId: 'u1', username: 'alice_login', displayName: 'Alice', avatarUrl: null }, attachments: [] },
     { discordMessageId: 'm2', timestamp: 2000, content: 'two', replyToDiscordMessageId: 'm1', author: { discordUserId: 'u2', username: 'bob_login', displayName: 'Bob', avatarUrl: null }, attachments: [] },
   ],
@@ -89,6 +101,25 @@ test('sanitizes unsupported username characters while keeping import possible', 
   assert.equal(safeUsername('🚀', '77'), 'discord-77');
 });
 
+
+test('category description comes from Discord channel topic and handle is transliterated', async () => {
+  const h = harness();
+  const result = await h.importer.configureChannel({
+    discordGuildId: 'g1',
+    discordChannelId: 'ua',
+    channelName: 'Проєкти Київ',
+    channelDescription: 'Опис каналу',
+  });
+  const category = h.categories.find(c => c.cid === result.cid);
+  assert.equal(category.description, 'Опис каналу');
+  assert.equal(category.handle, 'proyekty-kyyiv');
+});
+
+test('transliteration helper is shared by usernames and category handles', () => {
+  const { safeUsername, categoryHandle } = require('../../lib/names');
+  assert.equal(safeUsername('Вова Тест', '77'), 'vova-test');
+  assert.equal(categoryHandle('Вова Тест'), 'vova-test');
+});
 
 test('configureChannel creates a NodeBB category even when there are no Discord messages', async () => {
   const h = harness();
@@ -180,7 +211,7 @@ test('resetChannel purges one category and its thread/message mappings but keeps
 test('Discord user mention creates the mentioned NodeBB user and reuses it when they later post', async () => {
   const h = harness();
   const mentionPayload = {
-    discordChannelId: 'c1', channelName: 'Projects', discordThreadId: 'mentions-thread', title: 'Mentions', messages: [
+    discordChannelId: 'c1', channelName: 'Projects', channelDescription: 'Project discussions', discordThreadId: 'mentions-thread', title: 'Mentions', messages: [
       {
         discordMessageId: 'mention-m1', timestamp: 1000, content: 'hey <@222>', replyToDiscordMessageId: null,
         author: { discordUserId: '111', username: 'alice_login', displayName: 'Alice', avatarUrl: null },

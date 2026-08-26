@@ -54,6 +54,7 @@ function normalizeThread(guildId, channel, thread, messages, { importBots = fals
     discordGuildId: String(guildId),
     discordChannelId: String(channel.id),
     channelName: channel.name || `discord-${channel.id}`,
+    channelDescription: channel.topic || '',
     discordThreadId: String(thread.id),
     title: thread.name || `Discord thread ${thread.id}`,
     createdTimestamp: Date.parse(thread.thread_metadata?.create_timestamp || normalized[0]?.timestamp || new Date().toISOString()),
