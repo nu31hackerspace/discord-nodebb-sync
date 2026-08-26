@@ -20,6 +20,7 @@ function normalizeMention(guildId, mention) {
   if (!user.id) return null;
   return {
     discordUserId: String(user.id),
+    username: user.username || `discord-${user.id}`,
     displayName: displayNameForUser(user, member),
     avatarUrl: avatarUrlForUser(guildId, user, member),
     bot: Boolean(user.bot),
@@ -34,6 +35,7 @@ function normalizeMessage(guildId, msg) {
     replyToDiscordMessageId: msg.message_reference?.message_id ? String(msg.message_reference.message_id) : null,
     author: {
       discordUserId: String(msg.author.id),
+      username: msg.author.username || `discord-${msg.author.id}`,
       displayName: displayName(msg),
       avatarUrl: avatarUrl(guildId, msg),
       bot: Boolean(msg.author.bot),

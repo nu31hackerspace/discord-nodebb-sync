@@ -30,7 +30,23 @@ function harness() {
     async sortedSetRemove(k, value) { sortedSets.get(k)?.delete(String(value)); },
   };
   const users = []; const posts = []; const categories = [];
-  const User = { async create(d) { const uid = nextUid++; users.push({ uid, ...d }); return uid; } };
+  const User = {
+    async create(d) { const uid = nextUid++; users.push({ uid, userslug: String(d.username).toLowerCase().replace(/[^a-z0-9_-]+/g, '-'), ...d }); return uid; },
+    async getUserFields(uid, fields) {
+      const user = users.find(u => u.uid === Number(uid)) || {};
+      return Object.fromEntries(fields.map(field => [field, user[field] ?? '']));
+    },
+    async updateProfile(_callerUid, data) {
+      const user = users.find(u => u.uid === Number(data.uid));
+      if (!user) throw new Error('user not found');
+      if (data.username !== undefined) {
+        user.username = data.username;
+        user.userslug = String(data.username).toLowerCase().replace(/[^a-z0-9_-]+/g, '-');
+      }
+      if (data.fullname !== undefined) user.fullname = data.fullname;
+      return user;
+    },
+  };
   const Categories = {
     async create(d) { const c = { cid: nextCid++, ...d }; categories.push(c); return c; },
     async getCategories(cids) { return cids.map(cid => categories.find(c => Number(c.cid) === Number(cid)) || null); },
@@ -49,8 +65,8 @@ function harness() {
 }
 const payload = {
   discordChannelId: 'c1', channelName: 'Projects', discordThreadId: 't1', title: 'Build thing', messages: [
-    { discordMessageId: 'm1', timestamp: 1000, content: 'one', replyToDiscordMessageId: null, author: { discordUserId: 'u1', displayName: 'Alice', avatarUrl: null }, attachments: [] },
-    { discordMessageId: 'm2', timestamp: 2000, content: 'two', replyToDiscordMessageId: 'm1', author: { discordUserId: 'u2', displayName: 'Bob', avatarUrl: null }, attachments: [] },
+    { discordMessageId: 'm1', timestamp: 1000, content: 'one', replyToDiscordMessageId: null, author: { discordUserId: 'u1', username: 'alice_login', displayName: 'Alice', avatarUrl: null }, attachments: [] },
+    { discordMessageId: 'm2', timestamp: 2000, content: 'two', replyToDiscordMessageId: 'm1', author: { discordUserId: 'u2', username: 'bob_login', displayName: 'Bob', avatarUrl: null }, attachments: [] },
   ],
 };
 
@@ -164,12 +180,12 @@ test('Discord user mention creates the mentioned NodeBB user and reuses it when 
     discordChannelId: 'c1', channelName: 'Projects', discordThreadId: 'mentions-thread', title: 'Mentions', messages: [
       {
         discordMessageId: 'mention-m1', timestamp: 1000, content: 'hey <@222>', replyToDiscordMessageId: null,
-        author: { discordUserId: '111', displayName: 'Alice', avatarUrl: null },
-        mentions: [{ discordUserId: '222', displayName: 'Bob Smith', avatarUrl: 'https://example.test/bob.png' }], attachments: [],
+        author: { discordUserId: '111', username: 'alice_login', displayName: 'Alice', avatarUrl: null },
+        mentions: [{ discordUserId: '222', username: 'smalltells', displayName: 'Bob Smith', avatarUrl: 'https://example.test/bob.png' }], attachments: [],
       },
       {
         discordMessageId: 'mention-m2', timestamp: 2000, content: 'hello', replyToDiscordMessageId: null,
-        author: { discordUserId: '222', displayName: 'Bob Smith', avatarUrl: 'https://example.test/bob.png' },
+        author: { discordUserId: '222', username: 'smalltells', displayName: 'Bob Smith', avatarUrl: 'https://example.test/bob.png' },
         mentions: [], attachments: [],
       },
     ],
@@ -178,7 +194,24 @@ test('Discord user mention creates the mentioned NodeBB user and reuses it when 
   const result = await h.importer.importThread(mentionPayload);
   assert.equal(result.createdPosts, 2);
   assert.equal(h.users.length, 2);
-  assert.equal(h.posts[0].content, 'hey @bob-smith');
+  assert.equal(h.posts[0].content, 'hey @smalltells');
+  assert.equal(h.users.find(user => user.fullname === 'Bob Smith').username, 'smalltells');
   assert.equal(h.posts[1].uid, h.users.find(user => user.fullname === 'Bob Smith').uid);
   assert.equal(h.objects.get('discord-sync:user:222').uid, h.posts[1].uid);
+});
+
+
+test('existing Discord mapping is reused and profile is synchronized to Discord username/display name', async () => {
+  const h = harness();
+  await h.importer.ensureUser({ discordUserId: '222', username: 'old-wrong-name', displayName: 'Old Display', avatarUrl: null }, 1000);
+  const originalUid = h.objects.get('discord-sync:user:222').uid;
+
+  const identity = await h.importer.ensureUser({ discordUserId: '222', username: 'smalltells', displayName: 'Vova', avatarUrl: null }, 2000);
+
+  assert.equal(identity.uid, originalUid);
+  assert.equal(h.users.length, 1);
+  assert.equal(h.users[0].username, 'smalltells');
+  assert.equal(h.users[0].fullname, 'Vova');
+  assert.equal(h.objects.get('discord-sync:user:222').discordUsername, 'smalltells');
+  assert.equal(h.objects.get('discord-sync:user:222').displayName, 'Vova');
 });
