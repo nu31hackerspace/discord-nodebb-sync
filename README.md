@@ -201,3 +201,36 @@ git push origin master plugin-v0.1.1
 ```
 
 The workflow runs the worker/plugin tests and publishes only the root NodeBB plugin package. The `worker/` directory remains in the same Git repository and is not included in the npm tarball.
+
+## Release
+
+The NodeBB plugin and Discord worker are one product and always use the same version.
+
+Set the same version in both package files:
+
+```text
+package.json
+worker/package.json
+```
+
+Create one Git tag, for example:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+The `Release Discord NodeBB Sync` GitHub Actions workflow validates that the tag, plugin package version, and worker package version are identical. It then publishes both artifacts:
+
+```text
+npm:  nodebb-plugin-discord-sync@0.2.0
+GHCR: ghcr.io/nu31hackerspace/discord-nodebb-sync-worker:0.2.0
+```
+
+GitHub repository secret required for releases:
+
+```text
+NPM_TOKEN
+```
+
+The worker image is published to GHCR with the repository `GITHUB_TOKEN`.

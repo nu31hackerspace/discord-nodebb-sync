@@ -1,0 +1,101 @@
+name: Release Discord NodeBB Sync
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (for example 0.1.0)"
+        required: true
+        type: string
+
+env:
+  REGISTRY: ghcr.io
+  WORKER_IMAGE: discord-nodebb-sync-worker
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      owner_lc: ${{ steps.meta.outputs.owner_lc }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: version
+        name: Resolve and validate release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ inputs.version }}"
+          fi
+          PACKAGE_VERSION="$(node -p "require('./package.json').version")"
+          WORKER_VERSION="$(node -p "require('./worker/package.json').version")"
+          if [[ "$VERSION" != "$PACKAGE_VERSION" || "$VERSION" != "$WORKER_VERSION" ]]; then
+            echo "Release version ($VERSION), plugin version ($PACKAGE_VERSION), and worker version ($WORKER_VERSION) must match." >&2
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - id: meta
+        name: Prepare image coordinates
+        run: |
+          OWNER_LC="$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')"
+          echo "owner_lc=$OWNER_LC" >> "$GITHUB_OUTPUT"
+
+  test:
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: npm --prefix worker install --no-audit --no-fund
+      - run: npm test
+      - run: npm pack --dry-run
+
+  publish-plugin:
+    runs-on: ubuntu-latest
+    needs: [prepare, test]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - run: npm --prefix worker install --no-audit --no-fund
+      - name: Publish NodeBB plugin
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-worker:
+    runs-on: ubuntu-latest
+    needs: [prepare, test]
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./worker
+          file: ./worker/Dockerfile
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ needs.prepare.outputs.owner_lc }}/${{ env.WORKER_IMAGE }}:${{ needs.prepare.outputs.version }}
+            ${{ env.REGISTRY }}/${{ needs.prepare.outputs.owner_lc }}/${{ env.WORKER_IMAGE }}:latest
