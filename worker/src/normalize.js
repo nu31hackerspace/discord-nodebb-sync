@@ -1,14 +1,29 @@
 'use strict';
 
-function avatarUrl(guildId, message) {
-  const user = message.author || {};
-  const member = message.member || {};
+function avatarUrlForUser(guildId, user = {}, member = {}) {
   if (member.avatar) return `https://cdn.discordapp.com/guilds/${guildId}/users/${user.id}/avatars/${member.avatar}.png?size=256`;
   if (user.avatar) return `https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png?size=256`;
   return null;
 }
+function avatarUrl(guildId, message) {
+  return avatarUrlForUser(guildId, message.author || {}, message.member || {});
+}
+function displayNameForUser(user = {}, member = {}) {
+  return member.nick || user.global_name || user.username || `discord-${user.id || 'unknown'}`;
+}
 function displayName(message) {
-  return message.member?.nick || message.author?.global_name || message.author?.username || `discord-${message.author?.id || 'unknown'}`;
+  return displayNameForUser(message.author || {}, message.member || {});
+}
+function normalizeMention(guildId, mention) {
+  const user = mention?.user || mention || {};
+  const member = mention?.member || {};
+  if (!user.id) return null;
+  return {
+    discordUserId: String(user.id),
+    displayName: displayNameForUser(user, member),
+    avatarUrl: avatarUrlForUser(guildId, user, member),
+    bot: Boolean(user.bot),
+  };
 }
 function normalizeMessage(guildId, msg) {
   return {
@@ -23,6 +38,7 @@ function normalizeMessage(guildId, msg) {
       avatarUrl: avatarUrl(guildId, msg),
       bot: Boolean(msg.author.bot),
     },
+    mentions: (msg.mentions || []).map(mention => normalizeMention(guildId, mention)).filter(Boolean),
     attachments: (msg.attachments || []).map(a => ({
       id: String(a.id), name: a.filename || `attachment-${a.id}`, url: a.url,
       contentType: a.content_type || null, size: a.size || null,
@@ -43,4 +59,4 @@ function normalizeThread(guildId, channel, thread, messages, { importBots = fals
     messages: normalized,
   };
 }
-module.exports = { avatarUrl, displayName, normalizeMessage, normalizeThread };
+module.exports = { avatarUrlForUser, avatarUrl, displayNameForUser, displayName, normalizeMention, normalizeMessage, normalizeThread };

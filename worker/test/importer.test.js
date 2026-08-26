@@ -157,3 +157,28 @@ test('resetChannel purges one category and its thread/message mappings but keeps
   assert.ok(h.objects.get('discord-sync:user:u1'));
   assert.ok(h.objects.get('discord-sync:user:u2'));
 });
+
+test('Discord user mention creates the mentioned NodeBB user and reuses it when they later post', async () => {
+  const h = harness();
+  const mentionPayload = {
+    discordChannelId: 'c1', channelName: 'Projects', discordThreadId: 'mentions-thread', title: 'Mentions', messages: [
+      {
+        discordMessageId: 'mention-m1', timestamp: 1000, content: 'hey <@222>', replyToDiscordMessageId: null,
+        author: { discordUserId: '111', displayName: 'Alice', avatarUrl: null },
+        mentions: [{ discordUserId: '222', displayName: 'Bob Smith', avatarUrl: 'https://example.test/bob.png' }], attachments: [],
+      },
+      {
+        discordMessageId: 'mention-m2', timestamp: 2000, content: 'hello', replyToDiscordMessageId: null,
+        author: { discordUserId: '222', displayName: 'Bob Smith', avatarUrl: 'https://example.test/bob.png' },
+        mentions: [], attachments: [],
+      },
+    ],
+  };
+
+  const result = await h.importer.importThread(mentionPayload);
+  assert.equal(result.createdPosts, 2);
+  assert.equal(h.users.length, 2);
+  assert.equal(h.posts[0].content, 'hey @bob-smith');
+  assert.equal(h.posts[1].uid, h.users.find(user => user.fullname === 'Bob Smith').uid);
+  assert.equal(h.objects.get('discord-sync:user:222').uid, h.posts[1].uid);
+});

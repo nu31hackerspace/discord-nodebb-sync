@@ -19,6 +19,17 @@ function discordJsMessageToApi(message) {
     },
     member: message.member ? { nick: message.member.nickname || null, avatar: message.member.avatar || null } : null,
     message_reference: message.reference?.messageId ? { message_id: String(message.reference.messageId) } : null,
+    mentions: [...message.mentions.users.values()].map(user => {
+      const member = message.mentions.members?.get(user.id);
+      return {
+        id: String(user.id),
+        username: user.username,
+        global_name: user.globalName || null,
+        avatar: user.avatar || null,
+        bot: Boolean(user.bot),
+        member: member ? { nick: member.nickname || null, avatar: member.avatar || null } : null,
+      };
+    }),
     attachments: [...message.attachments.values()].map(attachment => ({
       id: String(attachment.id),
       filename: attachment.name || `attachment-${attachment.id}`,
