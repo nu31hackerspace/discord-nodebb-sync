@@ -1,13 +1,58 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createAssets, relativeUploadPath, isFileTooBigError } = require('../../lib/assets');
+const { createAssets, relativeUploadPath, isFileTooBigError, isInvalidFileTypeError } = require('../../lib/assets');
 
 test('recognizes NodeBB file-too-big error', () => {
   assert.equal(isFileTooBigError(new Error('[[error:file-too-big, 2048]]')), true);
   assert.equal(isFileTooBigError(new Error('nope')), false);
 });
 
+
+
+test('recognizes NodeBB invalid-file-type error', () => {
+  assert.equal(isInvalidFileTypeError(new Error('[[error:invalid-file-type, .csv, .png]]')), true);
+  assert.equal(isInvalidFileTypeError(new Error('nope')), false);
+});
+
+test('attachment outside NodeBB allowlist is stored directly but blocked extensions stay blocked', async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    arrayBuffer: async () => Buffer.from('a,b\n1,2\n'),
+    headers: { get: () => 'text/csv' },
+  });
+
+  const associated = [];
+  const uploadsController = {
+    async uploadFile() {
+      throw new Error('[[error:invalid-file-type, .csv, .png&#44; .jpg]]');
+    },
+  };
+  const User = {
+    async associateUpload(uid, rel) { associated.push([uid, rel]); },
+  };
+  const File = {
+    blockedExtensions() { return ['.exe']; },
+    async saveFileToLocal(filename) {
+      assert.match(filename, /\.csv$/);
+      return { url: `/assets/uploads/files/${filename}`, path: `/tmp/${filename}` };
+    },
+  };
+  const Plugins = { hooks: { async fire(_hook, data) { return data; } } };
+  const assets = createAssets({ uploadsController, User, File, Plugins, log: { warn() {} } });
+
+  try {
+    const blocks = await assets.importPostAttachments(42, [{ url: 'https://cdn.test/data.csv', name: 'data.csv', contentType: 'text/csv' }]);
+    assert.equal(blocks.length, 1);
+    assert.match(blocks[0], /^\[data\.csv\]\(\/assets\/uploads\/files\/.+\.csv\)$/);
+    assert.equal(associated.length, 1);
+    assert.equal(associated[0][0], 42);
+    assert.match(associated[0][1], /^files\/.+\.csv$/);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
 test('extracts relative upload path', () => {
   assert.equal(relativeUploadPath('/assets/uploads/files/a.png'), 'files/a.png');
   assert.equal(relativeUploadPath('https://forum.test/assets/uploads/files/a.png'), 'files/a.png');

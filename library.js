@@ -10,7 +10,9 @@ plugin.init = async function ({ router }) {
   const Topics = require.main.require('./src/topics');
   const Categories = require.main.require('./src/categories');
   const uploadsController = require.main.require('./src/controllers/uploads');
-  const assets = createAssets({ uploadsController, User });
+  const File = require.main.require('./src/file');
+  const Plugins = require.main.require('./src/plugins');
+  const assets = createAssets({ uploadsController, User, File, Plugins });
   const importer = createImporter({ db, User, Topics, Categories, assets });
   const auth = createAuth();
 
