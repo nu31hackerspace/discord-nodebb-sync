@@ -29,7 +29,8 @@ test('NodeBB topic is sent to worker and reverse mappings are saved', async () =
   try {
     const reverse = createReverseSync({ db: h.db, User: h.User, workerUrl: 'http://worker:8787', secret: 's' });
     await reverse.topicCreated({ topic: { cid: 20, tid: 30, title: 'Hello' }, post: { pid: 40, tid: 30, uid: 10, content: 'Body' }, data: {} });
-    assert.equal(request.url, 'http://worker:8787/v1/nodebb/topic');
+    assert.equal(request.url, 'http://worker:8787/v1/nodebb/event');
+    assert.equal(request.body.type, 'topic.created');
     assert.equal(request.body.discordChannelId, 'c1');
     assert.equal(request.body.author.displayName, 'User 10');
     assert.equal(h.objects.get('discord-sync:thread:dt1').tid, 30);
@@ -42,7 +43,9 @@ test('NodeBB topic is sent to worker and reverse mappings are saved', async () =
 test('NodeBB reply reuses thread mapping and preserves reply target', async () => {
   const h = harness();
   h.objects.set('discord-sync:thread:dt1', { tid: 30, cid: 20, discordChannelId: 'c1' });
+  h.objects.set('discord-sync:nodebb-thread:30', { discordThreadId: 'dt1' });
   h.objects.set('discord-sync:message:dm0', { pid: 39, tid: 30, uid: 9 });
+  h.objects.set('discord-sync:nodebb-message:39', { discordMessageId: 'dm0', discordMessageIds: JSON.stringify(['dm0']) });
   const oldFetch = global.fetch;
   let body;
   global.fetch = async (_url, options) => {

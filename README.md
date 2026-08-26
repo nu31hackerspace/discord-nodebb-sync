@@ -16,7 +16,7 @@ The plugin runs inside NodeBB. The worker is a separate container/process.
 ## Discord command
 
 ```text
-/forum-sync channel:<Discord forum channel> category:<optional NodeBB category> enabled:<true|false>
+/forum-sync channel:<Discord forum channel> category:<optional NodeBB category>
 ```
 
 Only Discord administrators can see and run the command.
@@ -35,6 +35,34 @@ Discord user id    <-> NodeBB uid
 The worker does not keep the synchronized-channel list in memory. For every relevant Discord event it asks the NodeBB plugin whether that channel is enabled.
 
 New NodeBB topics/replies in a synchronized category are sent back to Discord through an internal worker bridge. The plugin stores the returned Discord thread/message IDs, so NodeBB replies can preserve Discord reply targets. Discord-originated posts carry an internal origin marker and the worker ignores its own bot messages, preventing sync loops.
+
+## Architecture
+
+NodeBB plugin responsibilities are separated by layer:
+
+```text
+lib/mappings/repository.js       all persistent Discord <-> NodeBB mappings
+lib/services/users.js            Discord user -> NodeBB user identity
+lib/services/categories.js       category creation/binding/metadata
+lib/services/import.js           historical/realtime Discord -> NodeBB import
+lib/content/discord-to-nodebb.js content/mention/attachment rendering
+lib/services/outbound-sync.js    NodeBB hooks -> normalized sync events
+lib/clients/discord-worker.js    transport to the Discord worker
+```
+
+Worker responsibilities are separated similarly:
+
+```text
+worker/src/commands/             slash commands
+worker/src/inbound/              Discord -> NodeBB Gateway events
+worker/src/outbound/             NodeBB event dispatch + shared post renderer
+worker/src/discord/              Discord forum operations
+worker/src/http/                 internal bridge transport
+```
+
+NodeBB -> Discord uses a normalized event envelope (`topic.created`, `post.created`). Future `post.updated`/`post.deleted` handlers can reuse the same HTTP transport, mapping repository and renderer; only the corresponding NodeBB hooks and event handlers need to be added. `render-post.js` is the single place that builds the Discord author header, so create/update can share exactly the same rendering.
+
+Mappings are written in both directions. A NodeBB `pid` stores the complete `discordMessageIds[]` set, not only the first chunk, which prepares long posts for future update/delete support. Normal lookups are direct; database scans are retained only as reset compatibility for mappings written by older builds.
 
 ## Environment
 

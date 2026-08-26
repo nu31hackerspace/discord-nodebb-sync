@@ -18,7 +18,7 @@ test('bridge creates a Discord forum thread from a NodeBB topic', async () => {
   });
   assert.equal(options.name, 'NodeBB topic');
   assert.equal(options.message.content, '**Alice:** Hello');
-  assert.deepEqual(result, { discordThreadId: 'thread1', discordMessageId: 'starter1' });
+  assert.deepEqual(result, { discordThreadId: 'thread1', discordMessageId: 'starter1', discordMessageIds: ['starter1'] });
 });
 
 test('bridge sends a NodeBB reply as a Discord reply', async () => {
@@ -30,7 +30,7 @@ test('bridge sends a NodeBB reply as a Discord reply', async () => {
   });
   assert.equal(options.content, '**Bob:** Hi');
   assert.deepEqual(options.reply, { messageReference: 'message1', failIfNotExists: false });
-  assert.deepEqual(result, { discordMessageId: 'message2' });
+  assert.deepEqual(result, { discordMessageId: 'message2', discordMessageIds: ['message2'] });
 });
 
 test('bridge splits messages longer than the Discord 2000 character limit', () => {

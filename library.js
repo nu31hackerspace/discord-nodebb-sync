@@ -3,10 +3,13 @@ const { createAuth } = require('./lib/auth');
 const { createAssets } = require('./lib/assets');
 const { createImporter } = require('./lib/importer');
 const { createDiscordOAuth } = require('./lib/oauth');
-const { createReverseSync } = require('./lib/reverse');
+const { createMappingRepository } = require('./lib/mappings/repository');
+const { createUserService } = require('./lib/services/users');
+const { createDiscordWorkerClient } = require('./lib/clients/discord-worker');
+const { createOutboundSyncService } = require('./lib/services/outbound-sync');
 
 const plugin = {};
-let reverseSync = null;
+let outboundSync = null;
 plugin.init = async function ({ router }) {
   const db = require.main.require('./src/database');
   const User = require.main.require('./src/user');
@@ -16,31 +19,29 @@ plugin.init = async function ({ router }) {
   const File = require.main.require('./src/file');
   const Plugins = require.main.require('./src/plugins');
   const nconf = require.main.require('nconf');
+
+  const mappings = createMappingRepository({ db });
   const assets = createAssets({ uploadsController, User, File, Plugins });
   const discordOAuth = createDiscordOAuth({ db, User, nconf });
-  const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth });
-  reverseSync = createReverseSync({ db, User });
+  const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth, mappings });
+  const users = createUserService({ User, mappings, assets, discordOAuth });
+  const workerClient = createDiscordWorkerClient({});
+  outboundSync = createOutboundSyncService({ mappings, users, workerClient });
   const auth = createAuth();
 
-  // OAuth2 Multiple calls this endpoint with the Discord access token. The response is
-  // normalized to the OIDC-ish field names that oauth2-multiple understands.
   router.get('/api/discord-sync/v1/oauth/userinfo', (req, res) => discordOAuth.proxyUserInfo(req, res));
-
   await discordOAuth.backfillImportedUsers();
   await discordOAuth.configureStrategy();
 
   router.get('/api/discord-sync/v1/health', auth, (req, res) => res.json({ ok: true, plugin: 'nodebb-plugin-discord-sync', version: '0.1.0' }));
-
   router.get('/api/discord-sync/v1/categories', auth, async (req, res) => {
     try { res.json({ categories: await importer.listCategories() }); }
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
-
   router.get('/api/discord-sync/v1/channels', auth, async (req, res) => {
     try { res.json({ channels: await importer.listSyncChannels() }); }
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
-
   router.get('/api/discord-sync/v1/channel/:discordChannelId', auth, async (req, res) => {
     try {
       const channel = await importer.getSyncChannel(req.params.discordChannelId);
@@ -48,30 +49,22 @@ plugin.init = async function ({ router }) {
       res.json(channel);
     } catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
-
   router.delete('/api/discord-sync/v1/channel/:discordChannelId', auth, async (req, res) => {
     try { res.json(await importer.resetChannel(req.params.discordChannelId)); }
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
-
   router.post('/api/discord-sync/v1/channel', auth, async (req, res) => {
     try { res.json(await importer.configureChannel(req.body)); }
     catch (e) { console.error('[discord-sync]', e); res.status(400).json({ error: e.message }); }
   });
-
   router.post('/api/discord-sync/v1/thread', auth, async (req, res) => {
     try { res.json(await importer.importThread(req.body)); }
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
 };
 
-plugin.onTopicPost = async function (payload) {
-  if (reverseSync) await reverseSync.topicCreated(payload);
-};
-
-plugin.onTopicReply = async function (payload) {
-  if (reverseSync) await reverseSync.replyCreated(payload);
-};
+plugin.onTopicPost = async payload => outboundSync?.topicCreated(payload);
+plugin.onTopicReply = async payload => outboundSync?.replyCreated(payload);
 
 plugin.onOAuthLogin = async function ({ name, user, profile }) {
   if (name !== 'discord' || !user?.uid || !profile?.email || !profile?.email_verified) return;
@@ -87,5 +80,4 @@ plugin.onOAuthLogin = async function ({ name, user, profile }) {
   const confirmed = Number(await User.getUserField(uid, 'email:confirmed'));
   if (!confirmed) await User.email.confirmByUid(uid);
 };
-
 module.exports = plugin;
