@@ -137,10 +137,10 @@ Follow worker logs:
 docker compose -f docker-compose.dev.yml logs -f --tail=100 discord_worker
 ```
 
-After changing backend plugin code, restart NodeBB:
+After changing plugin code, rebuild/recreate NodeBB so the local npm package is packed and installed again:
 
 ```bash
-docker compose -f docker-compose.dev.yml restart nodebb
+docker compose -f docker-compose.dev.yml up -d --build nodebb
 ```
 
 ## Discord OAuth login
@@ -165,3 +165,39 @@ Discord user id -> discordId:uid -> NodeBB uid
 ```
 
 So `Log in with Discord` opens the already imported NodeBB account instead of creating a duplicate. Users who log in through Discord before their first imported message are also adopted by the importer later.
+
+## npm package
+
+This repository is a single Git repository containing both the NodeBB plugin and the Discord worker. The repository root is also the publishable npm package `nodebb-plugin-discord-sync`; `worker/` stays in the same repository but is excluded from the published package by the `files` list in `package.json`.
+
+Publish a plugin release from the repository root:
+
+```bash
+npm login
+npm version patch
+npm publish
+```
+
+After publishing, a normal NodeBB installation can install the plugin with:
+
+```bash
+npm install nodebb-plugin-discord-sync@0.1.1
+./nodebb activate nodebb-plugin-discord-sync
+./nodebb build
+```
+
+Production `nodebb-deploy/Dockerfile` installs the plugin from the npm registry. Its build argument `NODEBB_PLUGIN_DISCORD_SYNC_VERSION` selects the exact package version. Development does not require publishing every edit: `Dockerfile.dev` runs `npm pack` against this repository and installs the resulting package tarball, so dev exercises the same package contents/layout that npm will publish.
+
+### Optional GitHub release publishing
+
+The repository also contains `.github/workflows/publish-plugin.yml`. Add an npm automation token as the repository secret `NPM_TOKEN`, bump the root package version, then push a matching plugin release tag, for example:
+
+```bash
+npm version 0.1.1 --no-git-tag-version
+git add package.json
+git commit -m "Release plugin 0.1.1"
+git tag plugin-v0.1.1
+git push origin master plugin-v0.1.1
+```
+
+The workflow runs the worker/plugin tests and publishes only the root NodeBB plugin package. The `worker/` directory remains in the same Git repository and is not included in the npm tarball.

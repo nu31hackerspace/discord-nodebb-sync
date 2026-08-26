@@ -1,0 +1,28 @@
+name: Publish NodeBB plugin to npm
+
+on:
+  push:
+    tags:
+      - 'plugin-v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install worker test dependencies
+        run: npm --prefix worker install --no-audit --no-fund
+      - name: Test
+        run: npm test
+      - name: Publish plugin package
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

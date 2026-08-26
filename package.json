@@ -1,7 +1,7 @@
 {
   "name": "nodebb-plugin-discord-sync",
   "version": "0.1.0",
-  "description": "NodeBB import endpoint for discord-nodebb-sync",
+  "description": "Bidirectional Discord forum sync plugin for NodeBB",
   "main": "library.js",
   "license": "MIT",
   "engines": {
@@ -14,9 +14,25 @@
   ],
   "scripts": {
     "test": "npm --prefix worker test",
-    "import": "npm --prefix worker run import",
-    "sync": "npm --prefix worker run sync",
-    "fixture": "npm --prefix worker run fixture"
+    "prepublishOnly": "npm test"
+  },
+  "keywords": [
+    "nodebb",
+    "nodebb-plugin",
+    "discord",
+    "forum",
+    "sync"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nu31hackerspace/discord-nodebb-sync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nu31hackerspace/discord-nodebb-sync/issues"
+  },
+  "homepage": "https://github.com/nu31hackerspace/discord-nodebb-sync#readme",
+  "publishConfig": {
+    "access": "public"
   },
   "nbbpm": {
     "compatibility": "^4.15.0"
