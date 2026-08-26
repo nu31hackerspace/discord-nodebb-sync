@@ -22,6 +22,12 @@ function harness() {
     async getSortedSetRange(k) {
       return [...(sortedSets.get(k) || new Map()).entries()].sort((a, b) => a[1] - b[1]).map(([value]) => value);
     },
+    async scan({ match }) {
+      const prefix = match.endsWith('*') ? match.slice(0, -1) : match;
+      return [...objects.keys()].filter(k => k.startsWith(prefix));
+    },
+    async deleteAll(keys) { for (const k of keys) objects.delete(k); },
+    async sortedSetRemove(k, value) { sortedSets.get(k)?.delete(String(value)); },
   };
   const users = []; const posts = []; const categories = [];
   const User = { async create(d) { const uid = nextUid++; users.push({ uid, ...d }); return uid; } };
@@ -29,6 +35,10 @@ function harness() {
     async create(d) { const c = { cid: nextCid++, ...d }; categories.push(c); return c; },
     async getCategories(cids) { return cids.map(cid => categories.find(c => Number(c.cid) === Number(cid)) || null); },
     async getAllCategories() { return [...categories]; },
+    async purge(cid) {
+      const index = categories.findIndex(c => Number(c.cid) === Number(cid));
+      if (index !== -1) categories.splice(index, 1);
+    },
   };
   const Topics = {
     async post(d) { const tid = nextTid++; const postData = { pid: nextPid++, tid, uid: d.uid, content: d.content, timestamp: d.timestamp }; posts.push({ kind: 'topic', title: d.title, ...postData }); return { topicData: { tid }, postData }; },
@@ -121,4 +131,29 @@ test('getSyncChannel returns null for an unknown channel and reflects disabled s
   await h.importer.configureChannel({ discordGuildId: 'g1', discordChannelId: 'c1', channelName: 'Projects' });
   h.objects.set('discord-sync:subscription:c1', { ...h.objects.get('discord-sync:subscription:c1'), enabled: 0 });
   assert.equal((await h.importer.getSyncChannel('c1')).enabled, false);
+});
+
+
+test('resetChannel purges one category and its thread/message mappings but keeps users', async () => {
+  const h = harness();
+  const configured = await h.importer.configureChannel({ discordGuildId: 'g1', discordChannelId: 'c1', channelName: 'Projects' });
+  await h.importer.importThread(payload);
+  assert.equal(h.categories.length, 1);
+  assert.ok(h.objects.get('discord-sync:user:u1'));
+  assert.ok(h.objects.get('discord-sync:thread:t1'));
+  assert.ok(h.objects.get('discord-sync:message:m1'));
+
+  const result = await h.importer.resetChannel('c1');
+  assert.equal(result.cid, configured.cid);
+  assert.equal(result.deletedThreads, 1);
+  assert.equal(result.deletedMessages, 2);
+  assert.equal(h.categories.length, 0);
+  assert.equal(h.objects.has('discord-sync:channel:c1'), false);
+  assert.equal(h.objects.has('discord-sync:subscription:c1'), false);
+  assert.equal(h.objects.has(`discord-sync:category:${configured.cid}`), false);
+  assert.equal(h.objects.has('discord-sync:thread:t1'), false);
+  assert.equal(h.objects.has('discord-sync:message:m1'), false);
+  assert.equal(h.objects.has('discord-sync:message:m2'), false);
+  assert.ok(h.objects.get('discord-sync:user:u1'));
+  assert.ok(h.objects.get('discord-sync:user:u2'));
 });

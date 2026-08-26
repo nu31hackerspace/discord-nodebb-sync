@@ -40,6 +40,10 @@ class NodeBBClient {
     }
   }
 
+  resetChannel(discordChannelId) {
+    return this.request(`/api/discord-sync/v1/channel/${encodeURIComponent(String(discordChannelId))}`, { method: 'DELETE' });
+  }
+
   health() { return this.request('/api/discord-sync/v1/health'); }
 }
 module.exports = { NodeBBClient };

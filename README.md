@@ -48,6 +48,19 @@ IMPORT_BOTS=false
 
 The Discord application needs the Guilds, Guild Messages and Message Content intents.
 
+## Reset one channel
+
+Delete the NodeBB category/content and Discord mappings for one channel so it can be imported again from scratch. User mappings are kept.
+
+Run from `nodebb-deploy`:
+
+```bash
+docker compose -f docker-compose.dev.yml --profile discord-worker run --rm discord_worker \
+  node src/cli.js reset --channel <DISCORD_CHANNEL_ID>
+```
+
+Then run `/forum-sync` for that Discord channel again.
+
 ## Tests
 
 ```bash

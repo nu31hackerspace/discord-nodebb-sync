@@ -69,6 +69,15 @@ async function main() {
     console.log(await nodebb.importThread(JSON.parse(fs.readFileSync(file, 'utf8'))));
     return;
   }
+  if (cmd === 'reset') {
+    if (cfg.channelIds.length !== 1) throw new Error('Usage: node src/cli.js reset --channel <discord-channel-id>');
+    if (!cfg.secret) throw new Error('Set DISCORD_SYNC_SECRET');
+    const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
+    await waitForNodeBB(nodebb);
+    const result = await nodebb.resetChannel(cfg.channelIds[0]);
+    console.log(`Reset complete: channel=${result.discordChannelId}, category=${result.cid ?? 'none'}, threads=${result.deletedThreads}, messages=${result.deletedMessages}`);
+    return;
+  }
   if (cmd === 'import') return runImport(cfg);
   if (cmd === 'sync') return runGateway(cfg);
   throw new Error(`Unknown command: ${cmd}`);
