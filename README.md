@@ -71,7 +71,7 @@ docker compose -f docker-compose.dev.yml up -d --build nodebb
 Start or rebuild/recreate the worker:
 
 ```bash
-docker compose -f docker-compose.dev.yml --profile sync up -d --build discord_worker
+docker compose -f docker-compose.dev.yml --profile discord-worker up -d --build discord_worker
 ```
 
 Restart the worker without rebuilding:
