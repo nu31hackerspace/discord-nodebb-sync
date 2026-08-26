@@ -7,6 +7,7 @@ const { NodeBBClient } = require('./nodebb');
 const { importChannel } = require('./runner');
 const { startGatewaySync } = require('./gateway');
 const { waitForNodeBB } = require('./startup');
+const { startBridgeServer } = require('./bridge');
 
 function validateConfig(cfg) {
   if (!cfg.discordToken || !cfg.guildId || !cfg.secret) {
@@ -42,8 +43,11 @@ async function runGateway(cfg) {
     importBots: cfg.importBots,
   });
 
+  const bridge = await startBridgeServer({ client, secret: cfg.secret, port: cfg.workerPort });
+
   const shutdown = async (signal) => {
     console.log(`${signal}: closing Discord Gateway connection`);
+    await new Promise(resolve => bridge.close(resolve));
     client.destroy();
     process.exit(0);
   };

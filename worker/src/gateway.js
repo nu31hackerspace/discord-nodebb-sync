@@ -159,6 +159,7 @@ async function startGatewaySync({ token, guildId, nodebb, discordApi = null, imp
       const subscription = await nodebb.getSyncChannel(String(message.channel.parentId || ''));
       if (!subscription?.enabled) return;
       if (subscription.guildId && String(subscription.guildId) !== String(guildId)) return;
+      if (message.author?.id === client.user?.id) return;
       if (!importBots && message.author?.bot) return;
 
       const parent = message.channel.parent || await message.guild.channels.fetch(message.channel.parentId);

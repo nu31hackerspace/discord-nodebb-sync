@@ -26,6 +26,7 @@ function config() {
     nodebbUrl: (process.env.NODEBB_URL || 'http://127.0.0.1:4567').replace(/\/$/, ''),
     secret: process.env.DISCORD_SYNC_SECRET || '',
     importBots: /^(1|true|yes)$/i.test(process.env.IMPORT_BOTS || 'false'),
+    workerPort: Number(process.env.DISCORD_WORKER_PORT || 8787),
   };
 }
 module.exports = { loadEnv, config };

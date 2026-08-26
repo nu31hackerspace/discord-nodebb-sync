@@ -3,8 +3,10 @@ const { createAuth } = require('./lib/auth');
 const { createAssets } = require('./lib/assets');
 const { createImporter } = require('./lib/importer');
 const { createDiscordOAuth } = require('./lib/oauth');
+const { createReverseSync } = require('./lib/reverse');
 
 const plugin = {};
+let reverseSync = null;
 plugin.init = async function ({ router }) {
   const db = require.main.require('./src/database');
   const User = require.main.require('./src/user');
@@ -17,6 +19,7 @@ plugin.init = async function ({ router }) {
   const assets = createAssets({ uploadsController, User, File, Plugins });
   const discordOAuth = createDiscordOAuth({ db, User, nconf });
   const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth });
+  reverseSync = createReverseSync({ db, User });
   const auth = createAuth();
 
   // OAuth2 Multiple calls this endpoint with the Discord access token. The response is
@@ -60,6 +63,14 @@ plugin.init = async function ({ router }) {
     try { res.json(await importer.importThread(req.body)); }
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
+};
+
+plugin.onTopicPost = async function (payload) {
+  if (reverseSync) await reverseSync.topicCreated(payload);
+};
+
+plugin.onTopicReply = async function (payload) {
+  if (reverseSync) await reverseSync.replyCreated(payload);
 };
 
 plugin.onOAuthLogin = async function ({ name, user, profile }) {

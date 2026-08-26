@@ -1,6 +1,6 @@
 # Discord → NodeBB Sync
 
-NodeBB plugin + Discord worker for importing and synchronizing Discord forum channels with NodeBB.
+NodeBB plugin + Discord worker for bidirectional synchronization between Discord forum channels and NodeBB categories/topics.
 
 ## Structure
 
@@ -34,6 +34,8 @@ Discord user id    <-> NodeBB uid
 
 The worker does not keep the synchronized-channel list in memory. For every relevant Discord event it asks the NodeBB plugin whether that channel is enabled.
 
+New NodeBB topics/replies in a synchronized category are sent back to Discord through an internal worker bridge. The plugin stores the returned Discord thread/message IDs, so NodeBB replies can preserve Discord reply targets. Discord-originated posts carry an internal origin marker and the worker ignores its own bot messages, preventing sync loops.
+
 ## Environment
 
 Worker:
@@ -44,6 +46,14 @@ DISCORD_GUILD_ID
 NODEBB_URL
 DISCORD_SYNC_SECRET
 IMPORT_BOTS=false
+DISCORD_WORKER_PORT=8787
+```
+
+NodeBB container:
+
+```text
+DISCORD_WORKER_URL=http://discord_worker:8787
+DISCORD_SYNC_SECRET
 ```
 
 The Discord application needs the Guilds, Guild Messages and Message Content intents.

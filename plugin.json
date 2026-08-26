@@ -8,6 +8,14 @@
       "method": "init"
     },
     {
+      "hook": "action:topic.post",
+      "method": "onTopicPost"
+    },
+    {
+      "hook": "action:topic.reply",
+      "method": "onTopicReply"
+    },
+    {
       "hook": "action:oauth2.login",
       "method": "onOAuthLogin"
     }
