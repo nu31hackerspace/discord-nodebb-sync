@@ -13,6 +13,7 @@ test('shared NodeBB post renderer produces the author header used by outbound ev
   const handler = createNodeBBEventHandler({ client });
   await handler.handle({ type: 'topic.created', discordChannelId: 'c1', tid: 1, title: 'Topic', author: { displayName: 'Vova' }, content: 'hello' });
   assert.equal(calls[0].content, '**Vova:** hello');
+  assert.deepEqual(calls[0].allowedMentions, { parse: ['users'], repliedUser: false });
 });
 
 test('mapping repository stores all Discord chunks for one NodeBB pid', async () => {

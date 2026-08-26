@@ -7,6 +7,7 @@ const { createMappingRepository } = require('./lib/mappings/repository');
 const { createUserService } = require('./lib/services/users');
 const { createDiscordWorkerClient } = require('./lib/clients/discord-worker');
 const { createOutboundSyncService } = require('./lib/services/outbound-sync');
+const { createNodeBBToDiscordContent } = require('./lib/content/nodebb-to-discord');
 
 const plugin = {};
 let outboundSync = null;
@@ -14,6 +15,7 @@ plugin.init = async function ({ router }) {
   const db = require.main.require('./src/database');
   const User = require.main.require('./src/user');
   const Topics = require.main.require('./src/topics');
+  const Posts = require.main.require('./src/posts');
   const Categories = require.main.require('./src/categories');
   const uploadsController = require.main.require('./src/controllers/uploads');
   const File = require.main.require('./src/file');
@@ -26,7 +28,8 @@ plugin.init = async function ({ router }) {
   const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth, mappings });
   const users = createUserService({ User, mappings, assets, discordOAuth });
   const workerClient = createDiscordWorkerClient({});
-  outboundSync = createOutboundSyncService({ mappings, users, workerClient });
+  const outboundContent = createNodeBBToDiscordContent({ Posts, User, mappings });
+  outboundSync = createOutboundSyncService({ mappings, users, workerClient, content: outboundContent });
   const auth = createAuth();
 
   router.get('/api/discord-sync/v1/oauth/userinfo', (req, res) => discordOAuth.proxyUserInfo(req, res));
