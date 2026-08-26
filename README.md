@@ -104,3 +104,26 @@ After changing backend plugin code, restart NodeBB:
 ```bash
 docker compose -f docker-compose.dev.yml restart nodebb
 ```
+
+## Discord OAuth login
+
+`nodebb-deploy` installs and activates `nodebb-plugin-sso-oauth2-multiple` automatically. This plugin configures its `discord` strategy at NodeBB startup from:
+
+```text
+DISCORD_OAUTH_CLIENT_ID
+DISCORD_OAUTH_CLIENT_SECRET
+```
+
+The Discord application must have this redirect registered in Discord Developer Portal:
+
+```text
+<NODEBB_URL>/auth/discord/callback
+```
+
+Imported users are pre-linked in the exact mapping used by OAuth2 Multiple:
+
+```text
+Discord user id -> discordId:uid -> NodeBB uid
+```
+
+So `Log in with Discord` opens the already imported NodeBB account instead of creating a duplicate. Users who log in through Discord before their first imported message are also adopted by the importer later.

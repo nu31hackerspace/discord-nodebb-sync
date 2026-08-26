@@ -2,6 +2,7 @@
 const { createAuth } = require('./lib/auth');
 const { createAssets } = require('./lib/assets');
 const { createImporter } = require('./lib/importer');
+const { createDiscordOAuth } = require('./lib/oauth');
 
 const plugin = {};
 plugin.init = async function ({ router }) {
@@ -12,9 +13,18 @@ plugin.init = async function ({ router }) {
   const uploadsController = require.main.require('./src/controllers/uploads');
   const File = require.main.require('./src/file');
   const Plugins = require.main.require('./src/plugins');
+  const nconf = require.main.require('nconf');
   const assets = createAssets({ uploadsController, User, File, Plugins });
-  const importer = createImporter({ db, User, Topics, Categories, assets });
+  const discordOAuth = createDiscordOAuth({ db, User, nconf });
+  const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth });
   const auth = createAuth();
+
+  // OAuth2 Multiple calls this endpoint with the Discord access token. The response is
+  // normalized to the OIDC-ish field names that oauth2-multiple understands.
+  router.get('/api/discord-sync/v1/oauth/userinfo', (req, res) => discordOAuth.proxyUserInfo(req, res));
+
+  await discordOAuth.backfillImportedUsers();
+  await discordOAuth.configureStrategy();
 
   router.get('/api/discord-sync/v1/health', auth, (req, res) => res.json({ ok: true, plugin: 'nodebb-plugin-discord-sync', version: '0.1.0' }));
 
@@ -51,4 +61,20 @@ plugin.init = async function ({ router }) {
     catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
 };
+
+plugin.onOAuthLogin = async function ({ name, user, profile }) {
+  if (name !== 'discord' || !user?.uid || !profile?.email || !profile?.email_verified) return;
+  const User = require.main.require('./src/user');
+  const uid = Number(user.uid);
+  const currentEmail = await User.getUserField(uid, 'email');
+  if (currentEmail && String(currentEmail).toLowerCase() !== String(profile.email).toLowerCase()) return;
+  if (!currentEmail) {
+    const available = await User.email.available(profile.email);
+    if (!available) return;
+    await User.setUserField(uid, 'email', profile.email);
+  }
+  const confirmed = Number(await User.getUserField(uid, 'email:confirmed'));
+  if (!confirmed) await User.email.confirmByUid(uid);
+};
+
 module.exports = plugin;

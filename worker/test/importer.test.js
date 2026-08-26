@@ -9,6 +9,7 @@ function harness() {
   const db = {
     async getObjectField(k, f) { return objects.get(k)?.[f] ?? null; },
     async setObject(k, v) { objects.set(k, { ...(objects.get(k) || {}), ...v }); },
+    async setObjectField(k, f, v) { objects.set(k, { ...(objects.get(k) || {}), [f]: v }); },
     async deleteObjectField(k, f) {
       const value = { ...(objects.get(k) || {}) };
       delete value[f];
@@ -36,6 +37,7 @@ function harness() {
       const user = users.find(u => u.uid === Number(uid)) || {};
       return Object.fromEntries(fields.map(field => [field, user[field] ?? '']));
     },
+    async setUserField(uid, field, value) { const user = users.find(u => u.uid === Number(uid)); if (user) user[field] = value; },
     async updateProfile(_callerUid, data) {
       const user = users.find(u => u.uid === Number(data.uid));
       if (!user) throw new Error('user not found');
@@ -72,8 +74,12 @@ function harness() {
     async post(d) { const tid = nextTid++; const postData = { pid: nextPid++, tid, uid: d.uid, content: d.content, timestamp: d.timestamp }; posts.push({ kind: 'topic', title: d.title, ...postData }); return { topicData: { tid }, postData }; },
     async reply(d) { const p = { pid: nextPid++, tid: d.tid, uid: d.uid, content: d.content, timestamp: d.timestamp, toPid: d.toPid || null }; posts.push({ kind: 'reply', ...p }); return p; },
   };
+  const discordOAuth = {
+    async getUid(discordUserId) { const value = await db.getObjectField('discordId:uid', String(discordUserId)); return value ? Number(value) : null; },
+    async linkUser(discordUserId, uid) { await db.setObjectField('discordId:uid', String(discordUserId), Number(uid)); await User.setUserField(uid, 'discordId', String(discordUserId)); },
+  };
   const assets = { async importPostAttachments() { return []; }, async importAvatar() {} };
-  return { importer: createImporter({ db, User, Topics, Categories, assets }), objects, users, posts, categories };
+  return { importer: createImporter({ db, User, Topics, Categories, assets, discordOAuth }), objects, users, posts, categories, db, User };
 }
 const payload = {
   discordChannelId: 'c1', channelName: 'Projects', channelDescription: 'Project discussions', discordThreadId: 't1', title: 'Build thing', messages: [
@@ -236,4 +242,20 @@ test('existing Discord mapping is reused and profile is synchronized from Discor
   assert.equal(h.users[0].username, 'smalltells');
   assert.equal(h.users[0].fullname, 'Vova');
   assert.equal(h.objects.get('discord-sync:user:222').displayName, 'Vova');
+});
+
+
+test('imported users are pre-linked to Discord OAuth and OAuth-created users are adopted', async () => {
+  const h = harness();
+  const first = await h.importer.ensureUser({ discordUserId: '900', username: 'imported', displayName: 'Imported', avatarUrl: null }, 1000);
+  assert.equal(h.objects.get('discordId:uid')['900'], first.uid);
+  assert.equal(h.users.find(user => user.uid === first.uid).discordId, '900');
+
+  const oauthUid = await h.User.create({ username: 'oauth-user', fullname: 'OAuth User' });
+  await h.db.setObjectField('discordId:uid', '901', oauthUid);
+  await h.User.setUserField(oauthUid, 'discordId', '901');
+  const adopted = await h.importer.ensureUser({ discordUserId: '901', username: 'oauth-user', displayName: 'OAuth User', avatarUrl: null }, 2000);
+  assert.equal(adopted.uid, oauthUid);
+  assert.equal(h.objects.get('discord-sync:user:901').uid, oauthUid);
+  assert.equal(h.users.filter(user => user.username === 'oauth-user').length, 1);
 });
