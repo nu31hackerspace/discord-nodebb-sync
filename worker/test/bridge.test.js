@@ -17,7 +17,7 @@ test('bridge creates a Discord forum thread from a NodeBB topic', async () => {
     discordChannelId: 'channel1', title: 'NodeBB topic', content: 'Hello', author: { displayName: 'Alice' }, tid: 1,
   });
   assert.equal(options.name, 'NodeBB topic');
-  assert.equal(options.message.content, '**Alice:** Hello');
+  assert.equal(options.message.content, '**Alice**\nHello');
   assert.deepEqual(result, { discordThreadId: 'thread1', discordMessageId: 'starter1', discordMessageIds: ['starter1'] });
 });
 
@@ -28,7 +28,7 @@ test('bridge sends a NodeBB reply as a Discord reply', async () => {
   const result = await createReply(client, {
     discordThreadId: 'thread1', discordReplyToMessageId: 'message1', content: 'Hi', author: { displayName: 'Bob' },
   });
-  assert.equal(options.content, '**Bob:** Hi');
+  assert.equal(options.content, '**Bob**\nHi');
   assert.deepEqual(options.reply, { messageReference: 'message1', failIfNotExists: false });
   assert.deepEqual(result, { discordMessageId: 'message2', discordMessageIds: ['message2'] });
 });

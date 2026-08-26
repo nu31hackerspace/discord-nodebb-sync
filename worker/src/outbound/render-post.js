@@ -1,8 +1,9 @@
 'use strict';
 
 function renderPost(author, content) {
-  const prefix = author?.displayName ? `**${author.displayName}:** ` : '';
-  return `${prefix}${content || '\u200b'}`;
+  const body = content || '\u200b';
+  if (!author?.displayName) return body;
+  return `**${author.displayName}**\n${body}`;
 }
 
 function splitDiscordMessage(text, limit = 2000) {

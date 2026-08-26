@@ -6,13 +6,13 @@ const { createNodeBBEventHandler } = require('../src/outbound/nodebb-events');
 const { createMappingRepository } = require('../../lib/mappings/repository');
 
 test('shared NodeBB post renderer produces the author header used by outbound events', async () => {
-  assert.deepEqual(renderPostChunks({ displayName: 'Vova' }, 'hello'), ['**Vova:** hello']);
+  assert.deepEqual(renderPostChunks({ displayName: 'Vova' }, 'hello'), ['**Vova**\nhello']);
   const calls = [];
   const thread = { id: 't1', async fetchStarterMessage() { return { id: 'm1' }; }, async send(input) { calls.push(input); return { id: `m${calls.length + 1}` }; } };
   const client = { channels: { async fetch() { return { threads: { async create(input) { calls.push(input.message); return thread; } } }; } } };
   const handler = createNodeBBEventHandler({ client });
   await handler.handle({ type: 'topic.created', discordChannelId: 'c1', tid: 1, title: 'Topic', author: { displayName: 'Vova' }, content: 'hello' });
-  assert.equal(calls[0].content, '**Vova:** hello');
+  assert.equal(calls[0].content, '**Vova**\nhello');
   assert.deepEqual(calls[0].allowedMentions, { parse: ['users'], repliedUser: false });
 });
 
