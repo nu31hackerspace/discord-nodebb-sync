@@ -1,5 +1,5 @@
 'use strict';
-const { normalizeThread } = require('../normalize');
+const { normalizeThread, normalizeMention } = require('../normalize');
 
 function discordJsMessageToApi(message) {
   return {
@@ -18,6 +18,16 @@ function discordJsMessageToApi(message) {
 function threadToApi(thread) {
   return { id: String(thread.id), name: thread.name, parent_id: thread.parentId ? String(thread.parentId) : null, thread_metadata: { archived: Boolean(thread.archived), create_timestamp: thread.createdAt ? thread.createdAt.toISOString() : null, archive_timestamp: thread.archiveTimestamp ? new Date(thread.archiveTimestamp).toISOString() : null } };
 }
+function discordJsReactionActorToApi(user, member = null) {
+  return {
+    id: String(user.id),
+    username: user.username,
+    global_name: user.globalName || null,
+    avatar: user.avatar || null,
+    bot: Boolean(user.bot),
+    member: member ? { nick: member.nickname || null, avatar: member.avatar || null } : null,
+  };
+}
 function createDiscordEventHandler({ client, guildId, nodebb, importBots = false, log = console }) {
   async function messageCreate(message) {
     try {
@@ -33,6 +43,31 @@ function createDiscordEventHandler({ client, guildId, nodebb, importBots = false
       log.log(`[gateway:${parent.name}] ${message.channel.name}: message ${message.id}, ${result.createdPosts || 0} new post(s), tid=${result.tid}`);
     } catch (error) { log.error(`Gateway message import failed: ${error.stack || error}`); }
   }
-  return { messageCreate };
+  async function reactionEvent(operation, reaction, user) {
+    try {
+      if (reaction.partial && reaction.fetch) await reaction.fetch();
+      let message = reaction.message;
+      if (message?.partial && message.fetch) message = await message.fetch();
+      if (!message || String(message.guildId || '') !== String(guildId) || !message.channel?.isThread?.()) return;
+      if (user?.id === client.user?.id || (!importBots && user?.bot)) return;
+      const subscription = await nodebb.getSyncChannel(String(message.channel.parentId || ''));
+      if (!subscription?.enabled || (subscription.guildId && String(subscription.guildId) !== String(guildId))) return;
+      let member = null;
+      try { member = await message.guild?.members?.fetch?.(user.id); } catch {}
+      const actor = normalizeMention(guildId, discordJsReactionActorToApi(user, member));
+      if (!actor) return;
+      const payload = {
+        discordMessageId: String(message.id),
+        emoji: { id: reaction.emoji?.id ? String(reaction.emoji.id) : null, name: reaction.emoji?.name || '' },
+        actor,
+        timestamp: Date.now(),
+      };
+      const result = operation === 'remove' ? await nodebb.removeReaction(payload) : await nodebb.addReaction(payload);
+      log.log(`[gateway:reaction] ${operation} ${payload.emoji.name} on ${message.id}: ${result.applied ? 'applied' : result.reason}`);
+    } catch (error) { log.error(`Gateway reaction ${operation} failed: ${error.stack || error}`); }
+  }
+  const reactionAdd = (reaction, user) => reactionEvent('add', reaction, user);
+  const reactionRemove = (reaction, user) => reactionEvent('remove', reaction, user);
+  return { messageCreate, reactionAdd, reactionRemove };
 }
-module.exports = { discordJsMessageToApi, threadToApi, createDiscordEventHandler };
+module.exports = { discordJsMessageToApi, discordJsReactionActorToApi, threadToApi, createDiscordEventHandler };

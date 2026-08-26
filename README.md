@@ -34,6 +34,8 @@ Discord user id    <-> NodeBB uid
 
 The worker does not keep the synchronized-channel list in memory. For every relevant Discord event it asks the NodeBB plugin whether that channel is enabled.
 
+Discord post reactions are imported historically and synchronized in realtime from Discord to NodeBB. Native Unicode emoji are matched against the active `nodebb-plugin-emoji` table; Discord custom emoji and Unicode emoji missing from that table are ignored. Reacting Discord users go through the same user service as message authors, so an unknown reactor is created once and later reused by Discord ID. If `nodebb-plugin-reactions` is not active, reaction operations become no-ops and message/topic synchronization continues normally.
+
 New NodeBB topics/replies in a synchronized category are sent back to Discord through an internal worker bridge. The plugin stores the returned Discord thread/message IDs, so NodeBB replies can preserve Discord reply targets. Discord-originated posts carry an internal origin marker and the worker ignores its own bot messages, preventing sync loops.
 
 ## Architecture
@@ -45,6 +47,7 @@ lib/mappings/repository.js       all persistent Discord <-> NodeBB mappings
 lib/services/users.js            Discord user -> NodeBB user identity
 lib/services/categories.js       category creation/binding/metadata
 lib/services/import.js           historical/realtime Discord -> NodeBB import
+lib/services/reactions.js        Discord reactions -> NodeBB reaction service
 lib/content/discord-to-nodebb.js content/mention/attachment rendering
 lib/services/outbound-sync.js    NodeBB hooks -> normalized sync events
 lib/clients/discord-worker.js    transport to the Discord worker
@@ -84,7 +87,7 @@ DISCORD_WORKER_URL=http://discord_worker:8787
 DISCORD_SYNC_SECRET
 ```
 
-The Discord application needs the Guilds, Guild Messages and Message Content intents.
+The Discord application needs the Guilds, Guild Messages, Guild Message Reactions and Message Content intents.
 
 ## Reset one channel
 

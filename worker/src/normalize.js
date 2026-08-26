@@ -26,6 +26,15 @@ function normalizeMention(guildId, mention) {
     bot: Boolean(user.bot),
   };
 }
+function normalizeReactionUser(guildId, actor = {}) {
+  return normalizeMention(guildId, actor);
+}
+function normalizeReactions(guildId, reactions = []) {
+  return (reactions || []).map(item => ({
+    emoji: { id: item?.emoji?.id ? String(item.emoji.id) : null, name: item?.emoji?.name || '' },
+    users: (item?.users || []).map(user => normalizeReactionUser(guildId, user)).filter(Boolean),
+  }));
+}
 function normalizeMessage(guildId, msg) {
   return {
     discordMessageId: String(msg.id),
@@ -41,6 +50,7 @@ function normalizeMessage(guildId, msg) {
       bot: Boolean(msg.author.bot),
     },
     mentions: (msg.mentions || []).map(mention => normalizeMention(guildId, mention)).filter(Boolean),
+    reactions: normalizeReactions(guildId, msg._discordSyncReactions || []),
     attachments: (msg.attachments || []).map(a => ({
       id: String(a.id), name: a.filename || `attachment-${a.id}`, url: a.url,
       contentType: a.content_type || null, size: a.size || null,
@@ -50,6 +60,11 @@ function normalizeMessage(guildId, msg) {
 }
 function normalizeThread(guildId, channel, thread, messages, { importBots = false } = {}) {
   const normalized = messages.map(m => normalizeMessage(guildId, m)).filter(m => importBots || !m.author.bot);
+  if (!importBots) {
+    for (const message of normalized) {
+      for (const reaction of message.reactions || []) reaction.users = reaction.users.filter(user => !user.bot);
+    }
+  }
   return {
     discordGuildId: String(guildId),
     discordChannelId: String(channel.id),
@@ -62,4 +77,4 @@ function normalizeThread(guildId, channel, thread, messages, { importBots = fals
     messages: normalized,
   };
 }
-module.exports = { avatarUrlForUser, avatarUrl, displayNameForUser, displayName, normalizeMention, normalizeMessage, normalizeThread };
+module.exports = { avatarUrlForUser, avatarUrl, displayNameForUser, displayName, normalizeMention, normalizeReactionUser, normalizeReactions, normalizeMessage, normalizeThread };

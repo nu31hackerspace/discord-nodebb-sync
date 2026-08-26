@@ -40,6 +40,14 @@ class NodeBBClient {
     }
   }
 
+  addReaction(payload) {
+    return this.request('/api/discord-sync/v1/reaction', { method: 'POST', body: JSON.stringify(payload) });
+  }
+
+  removeReaction(payload) {
+    return this.request('/api/discord-sync/v1/reaction', { method: 'DELETE', body: JSON.stringify(payload) });
+  }
+
   resetChannel(discordChannelId) {
     return this.request(`/api/discord-sync/v1/channel/${encodeURIComponent(String(discordChannelId))}`, { method: 'DELETE' });
   }

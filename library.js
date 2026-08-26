@@ -8,6 +8,7 @@ const { createUserService } = require('./lib/services/users');
 const { createDiscordWorkerClient } = require('./lib/clients/discord-worker');
 const { createOutboundSyncService } = require('./lib/services/outbound-sync');
 const { createNodeBBToDiscordContent } = require('./lib/content/nodebb-to-discord');
+const { createReactionService } = require('./lib/services/reactions');
 
 const plugin = {};
 let outboundSync = null;
@@ -25,8 +26,9 @@ plugin.init = async function ({ router }) {
   const mappings = createMappingRepository({ db });
   const assets = createAssets({ uploadsController, User, File, Plugins });
   const discordOAuth = createDiscordOAuth({ db, User, nconf });
-  const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth, mappings });
   const users = createUserService({ User, mappings, assets, discordOAuth });
+  const reactions = createReactionService({ nodebbRequire: require.main.require.bind(require.main), mappings, users });
+  const importer = createImporter({ db, User, Topics, Categories, assets, discordOAuth, mappings, reactions });
   const workerClient = createDiscordWorkerClient({});
   const outboundContent = createNodeBBToDiscordContent({ Posts, User, mappings });
   outboundSync = createOutboundSyncService({ mappings, users, workerClient, content: outboundContent });
@@ -59,6 +61,18 @@ plugin.init = async function ({ router }) {
   router.post('/api/discord-sync/v1/channel', auth, async (req, res) => {
     try { res.json(await importer.configureChannel(req.body)); }
     catch (e) { console.error('[discord-sync]', e); res.status(400).json({ error: e.message }); }
+  });
+  router.post('/api/discord-sync/v1/reaction', auth, async (req, res) => {
+    try {
+      const result = await reactions.applyDiscordEvent({ ...req.body, operation: 'add' });
+      res.json(result);
+    } catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
+  });
+  router.delete('/api/discord-sync/v1/reaction', auth, async (req, res) => {
+    try {
+      const result = await reactions.applyDiscordEvent({ ...req.body, operation: 'remove' });
+      res.json(result);
+    } catch (e) { console.error('[discord-sync]', e); res.status(500).json({ error: e.message }); }
   });
   router.post('/api/discord-sync/v1/thread', auth, async (req, res) => {
     try { res.json(await importer.importThread(req.body)); }

@@ -13,6 +13,7 @@ async function importChannel({ discord, nodebb, guildId, channelId, importBots =
   const summary = { channelId: String(channelId), threads: 0, messages: 0 };
   for (const thread of threads) {
     const messages = await discord.messages(thread.id);
+    if (discord.hydrateMessageReactions) await discord.hydrateMessageReactions(guildId, thread.id, messages);
     const payload = normalizeThread(guildId, channel, thread, messages, { importBots });
     if (!payload.messages.length) continue;
     const result = await nodebb.importThread(payload);
