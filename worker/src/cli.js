@@ -6,6 +6,7 @@ const { DiscordApi } = require('./discord');
 const { NodeBBClient } = require('./nodebb');
 const { importChannel } = require('./runner');
 const { startGatewaySync } = require('./gateway');
+const { waitForNodeBB } = require('./startup');
 
 function validateConfig(cfg) {
   if (!cfg.discordToken || !cfg.guildId || !cfg.secret) {
@@ -22,7 +23,7 @@ async function runImport(cfg) {
   validateImportConfig(cfg);
   const discord = new DiscordApi(cfg.discordToken);
   const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
-  await nodebb.health();
+  await waitForNodeBB(nodebb);
   for (const channelId of cfg.channelIds) {
     await importChannel({ discord, nodebb, guildId: cfg.guildId, channelId, importBots: cfg.importBots });
   }
@@ -31,7 +32,7 @@ async function runImport(cfg) {
 async function runGateway(cfg) {
   validateConfig(cfg);
   const nodebb = new NodeBBClient(cfg.nodebbUrl, cfg.secret);
-  await nodebb.health();
+  await waitForNodeBB(nodebb);
   const discord = new DiscordApi(cfg.discordToken);
   const client = await startGatewaySync({
     token: cfg.discordToken,
