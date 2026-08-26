@@ -82,7 +82,10 @@ test('second import is idempotent', async () => {
 
 test('sanitizes unsupported username characters while keeping import possible', async () => {
   const { safeUsername } = require('../../lib/importer');
-  assert.equal(safeUsername('Alice 🚀', '77'), 'Alice');
+  assert.equal(safeUsername('Alice 🚀', '77'), 'alice');
+  assert.equal(safeUsername('Bob Smith', '77'), 'bob-smith');
+  assert.equal(safeUsername('Вова Тест', '77'), 'vova-test');
+  assert.equal(safeUsername('Їжак Ґала', '77'), 'yizhak-gala');
   assert.equal(safeUsername('🚀', '77'), 'discord-77');
 });
 
@@ -194,14 +197,14 @@ test('Discord user mention creates the mentioned NodeBB user and reuses it when 
   const result = await h.importer.importThread(mentionPayload);
   assert.equal(result.createdPosts, 2);
   assert.equal(h.users.length, 2);
-  assert.equal(h.posts[0].content, 'hey @smalltells');
-  assert.equal(h.users.find(user => user.fullname === 'Bob Smith').username, 'smalltells');
+  assert.equal(h.posts[0].content, 'hey @bob-smith');
+  assert.equal(h.users.find(user => user.fullname === 'Bob Smith').username, 'bob-smith');
   assert.equal(h.posts[1].uid, h.users.find(user => user.fullname === 'Bob Smith').uid);
   assert.equal(h.objects.get('discord-sync:user:222').uid, h.posts[1].uid);
 });
 
 
-test('existing Discord mapping is reused and profile is synchronized to Discord username/display name', async () => {
+test('existing Discord mapping is reused and profile is synchronized from Discord display name', async () => {
   const h = harness();
   await h.importer.ensureUser({ discordUserId: '222', username: 'old-wrong-name', displayName: 'Old Display', avatarUrl: null }, 1000);
   const originalUid = h.objects.get('discord-sync:user:222').uid;
@@ -210,8 +213,7 @@ test('existing Discord mapping is reused and profile is synchronized to Discord 
 
   assert.equal(identity.uid, originalUid);
   assert.equal(h.users.length, 1);
-  assert.equal(h.users[0].username, 'smalltells');
+  assert.equal(h.users[0].username, 'vova');
   assert.equal(h.users[0].fullname, 'Vova');
-  assert.equal(h.objects.get('discord-sync:user:222').discordUsername, 'smalltells');
   assert.equal(h.objects.get('discord-sync:user:222').displayName, 'Vova');
 });
