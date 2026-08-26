@@ -50,3 +50,75 @@ test('oversized attachment retries upload as admin and associates original user'
     global.fetch = originalFetch;
   }
 });
+
+test('attachment download retries transient 503 responses', async () => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    if (calls < 3) {
+      return {
+        ok: false,
+        status: 503,
+        headers: { get: () => null },
+      };
+    }
+    return {
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => Buffer.from('abc'),
+      headers: { get: () => 'image/jpeg' },
+    };
+  };
+
+  const uploadsController = {
+    async uploadFile() {
+      return { url: '/assets/uploads/files/retried.jpg' };
+    },
+  };
+  const User = {};
+  const assets = createAssets({
+    uploadsController,
+    User,
+    log: { warn() {} },
+    downloadOptions: { attempts: 4, baseDelayMs: 1, sleepFn: async () => {} },
+  });
+
+  try {
+    const blocks = await assets.importPostAttachments(42, [{
+      url: 'https://cdn.test/retry.jpg',
+      name: 'retry.jpg',
+      contentType: 'image/jpeg',
+    }]);
+    assert.equal(calls, 3);
+    assert.equal(blocks[0], '![retry.jpg](/assets/uploads/files/retried.jpg)');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('attachment download does not retry a permanent 404', async () => {
+  const originalFetch = global.fetch;
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return { ok: false, status: 404, headers: { get: () => null } };
+  };
+
+  const assets = createAssets({
+    uploadsController: {},
+    User: {},
+    log: { warn() {} },
+    downloadOptions: { attempts: 4, baseDelayMs: 1, sleepFn: async () => {} },
+  });
+
+  try {
+    await assert.rejects(
+      () => assets.importPostAttachments(42, [{ url: 'https://cdn.test/missing.jpg', name: 'missing.jpg', contentType: 'image/jpeg' }]),
+      /attachment download failed 404/,
+    );
+    assert.equal(calls, 1);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
