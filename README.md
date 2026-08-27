@@ -169,41 +169,20 @@ Discord user id -> discordId:uid -> NodeBB uid
 
 So `Log in with Discord` opens the already imported NodeBB account instead of creating a duplicate. Users who log in through Discord before their first imported message are also adopted by the importer later.
 
-## npm package
+## NodeBB plugin package
 
-This repository is a single Git repository containing both the NodeBB plugin and the Discord worker. The repository root is also the publishable npm package `nodebb-plugin-discord-sync`; `worker/` stays in the same repository but is excluded from the published package by the `files` list in `package.json`.
+This repository is a single Git repository containing both the NodeBB plugin and the Discord worker. The repository root is the NodeBB plugin package `nodebb-plugin-discord-sync`; `worker/` stays in the same repository and is excluded from the package by the `files` list in `package.json`.
 
-Publish a plugin release from the repository root:
-
-```bash
-npm login
-npm version patch
-npm publish
-```
-
-After publishing, a normal NodeBB installation can install the plugin with:
+A normal NodeBB installation can install the plugin from a GitHub release tag:
 
 ```bash
-npm install nodebb-plugin-discord-sync@0.1.1
+npm install https://github.com/nu31hackerspace/discord-nodebb-sync/archive/refs/tags/v0.2.0.tar.gz
 ./nodebb activate nodebb-plugin-discord-sync
 ./nodebb build
 ```
 
-Production `nodebb-deploy/Dockerfile` installs the plugin from the npm registry. Its build argument `NODEBB_PLUGIN_DISCORD_SYNC_VERSION` selects the exact package version. Development does not require publishing every edit: `Dockerfile.dev` runs `npm pack` against this repository and installs the resulting package tarball, so dev exercises the same package contents/layout that npm will publish.
+Production `nodebb-deploy/Dockerfile` installs the plugin from the matching GitHub tag. Its build argument `DISCORD_SYNC_VERSION` selects tag `v${DISCORD_SYNC_VERSION}`. Development does not require tagging every edit: `Dockerfile.dev` runs `npm pack` against this repository and installs the resulting package tarball, so dev exercises the same package contents/layout that production installs from the tag.
 
-### Optional GitHub release publishing
-
-The repository also contains `.github/workflows/publish-plugin.yml`. Add an npm automation token as the repository secret `NPM_TOKEN`, bump the root package version, then push a matching plugin release tag, for example:
-
-```bash
-npm version 0.1.1 --no-git-tag-version
-git add package.json
-git commit -m "Release plugin 0.1.1"
-git tag plugin-v0.1.1
-git push origin master plugin-v0.1.1
-```
-
-The workflow runs the worker/plugin tests and publishes only the root NodeBB plugin package. The `worker/` directory remains in the same Git repository and is not included in the npm tarball.
 
 ## Release
 
@@ -223,17 +202,11 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
-The `Release Discord NodeBB Sync` GitHub Actions workflow validates that the tag, plugin package version, and worker package version are identical. It then publishes both artifacts:
+The `Release Discord NodeBB Sync` GitHub Actions workflow validates that the tag, plugin package version, and worker package version are identical. It then publishes the worker image; `nodebb-deploy` uses the same Git tag to install the NodeBB plugin:
 
 ```text
-npm:  nodebb-plugin-discord-sync@0.2.0
 GHCR: ghcr.io/nu31hackerspace/discord-nodebb-sync-worker:0.2.0
-```
-
-GitHub repository secret required for releases:
-
-```text
-NPM_TOKEN
+Git tag: v0.2.0, used by nodebb-deploy to install the NodeBB plugin
 ```
 
 The worker image is published to GHCR with the repository `GITHUB_TOKEN`.

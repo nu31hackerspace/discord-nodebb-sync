@@ -13,8 +13,7 @@
     "lib"
   ],
   "scripts": {
-    "test": "npm --prefix worker test",
-    "prepublishOnly": "npm test"
+    "test": "npm --prefix worker test"
   },
   "keywords": [
     "nodebb",
@@ -31,9 +30,6 @@
     "url": "https://github.com/nu31hackerspace/discord-nodebb-sync/issues"
   },
   "homepage": "https://github.com/nu31hackerspace/discord-nodebb-sync#readme",
-  "publishConfig": {
-    "access": "public"
-  },
   "nbbpm": {
     "compatibility": "^4.15.0"
   }

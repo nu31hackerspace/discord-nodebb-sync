@@ -35,6 +35,7 @@ jobs:
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION="${{ inputs.version }}"
+            git ls-remote --exit-code --tags origin "refs/tags/v${VERSION}" >/dev/null
           fi
           PACKAGE_VERSION="$(node -p "require('./package.json').version")"
           WORKER_VERSION="$(node -p "require('./worker/package.json').version")"
@@ -60,23 +61,6 @@ jobs:
       - run: npm --prefix worker install --no-audit --no-fund
       - run: npm test
       - run: npm pack --dry-run
-
-  publish-plugin:
-    runs-on: ubuntu-latest
-    needs: [prepare, test]
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          registry-url: "https://registry.npmjs.org"
-      - run: npm --prefix worker install --no-audit --no-fund
-      - name: Publish NodeBB plugin
-        run: npm publish
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
   publish-worker:
     runs-on: ubuntu-latest
