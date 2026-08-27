@@ -1,71 +1,47 @@
-# Discord → NodeBB Sync
+# Discord NodeBB Sync
 
-NodeBB plugin + Discord worker for bidirectional synchronization between Discord forum channels and NodeBB categories/topics.
+NodeBB plugin and Discord worker for syncing Discord forum channels with NodeBB categories/topics.
 
-## Structure
+## Components
 
 ```text
-library.js        NodeBB plugin entrypoint
-lib/              plugin code
-plugin.json       NodeBB plugin manifest
-worker/           Discord worker
+library.js, lib/      NodeBB plugin
+plugin.json          NodeBB plugin manifest
+worker/              Discord bot/worker container
 ```
 
-The plugin runs inside NodeBB. The worker is a separate container/process.
+The plugin runs inside NodeBB. The worker runs as a separate process/container.
 
-## Discord command
+## What Syncs
+
+```text
+Discord forum channel <-> NodeBB category
+Discord thread        <-> NodeBB topic
+Discord message       <-> NodeBB post
+Discord user          <-> NodeBB user
+Discord reaction      -> NodeBB reaction
+NodeBB topic/post     -> Discord thread/message
+```
+
+Sync is enabled per Discord forum channel with the slash command:
 
 ```text
 /forum-sync channel:<Discord forum channel> category:<optional NodeBB category>
 ```
 
-Only Discord administrators can see and run the command.
+Only Discord administrators can use the command. If `category` is omitted, the plugin creates a NodeBB category from the Discord channel name.
 
-If `category` is omitted, NodeBB creates a category immediately using the Discord channel name, even when the Discord channel is empty. If a category is selected, the channel is bound to its numeric NodeBB `cid`; later renaming does not break the mapping.
+## Required NodeBB Plugins
 
-Mappings and sync state are stored through NodeBB's database abstraction:
-
-```text
-Discord channel id <-> NodeBB cid
-Discord thread id  <-> NodeBB tid
-Discord message id <-> NodeBB pid
-Discord user id    <-> NodeBB uid
-```
-
-The worker does not keep the synchronized-channel list in memory. For every relevant Discord event it asks the NodeBB plugin whether that channel is enabled.
-
-Discord post reactions are imported historically and synchronized in realtime from Discord to NodeBB. Native Unicode emoji are matched against the active `nodebb-plugin-emoji` table; Discord custom emoji and Unicode emoji missing from that table are ignored. Reacting Discord users go through the same user service as message authors, so an unknown reactor is created once and later reused by Discord ID. If `nodebb-plugin-reactions` is not active, reaction operations become no-ops and message/topic synchronization continues normally.
-
-New NodeBB topics/replies in a synchronized category are sent back to Discord through an internal worker bridge. The plugin stores the returned Discord thread/message IDs, so NodeBB replies can preserve Discord reply targets. Discord-originated posts carry an internal origin marker and the worker ignores its own bot messages, preventing sync loops.
-
-## Architecture
-
-NodeBB plugin responsibilities are separated by layer:
+`nodebb-deploy` installs and activates these with the NodeBB image:
 
 ```text
-lib/mappings/repository.js       all persistent Discord <-> NodeBB mappings
-lib/services/users.js            Discord user -> NodeBB user identity
-lib/services/categories.js       category creation/binding/metadata
-lib/services/import.js           historical/realtime Discord -> NodeBB import
-lib/services/reactions.js        Discord reactions -> NodeBB reaction service
-lib/content/discord-to-nodebb.js content/mention/attachment rendering
-lib/services/outbound-sync.js    NodeBB hooks -> normalized sync events
-lib/clients/discord-worker.js    transport to the Discord worker
+nodebb-plugin-discord-sync
+nodebb-plugin-sso-oauth2-multiple
+@nodebb/nodebb-plugin-reactions
 ```
 
-Worker responsibilities are separated similarly:
-
-```text
-worker/src/commands/             slash commands
-worker/src/inbound/              Discord -> NodeBB Gateway events
-worker/src/outbound/             NodeBB event dispatch + shared post renderer
-worker/src/discord/              Discord forum operations
-worker/src/http/                 internal bridge transport
-```
-
-NodeBB -> Discord uses a normalized event envelope (`topic.created`, `post.created`). Future `post.updated`/`post.deleted` handlers can reuse the same HTTP transport, mapping repository and renderer; only the corresponding NodeBB hooks and event handlers need to be added. `render-post.js` is the single place that builds the Discord author header, so create/update can share exactly the same rendering.
-
-Mappings are written in both directions. A NodeBB `pid` stores the complete `discordMessageIds[]` set, not only the first chunk, which prepares long posts for future update/delete support. Normal lookups are direct; database scans are retained only as reset compatibility for mappings written by older builds.
+Reaction sync is optional at runtime. If the reactions plugin is disabled, message/topic sync still works.
 
 ## Environment
 
@@ -85,13 +61,119 @@ NodeBB container:
 ```text
 DISCORD_WORKER_URL=http://discord_worker:8787
 DISCORD_SYNC_SECRET
+DISCORD_OAUTH_CLIENT_ID
+DISCORD_OAUTH_CLIENT_SECRET
 ```
 
-The Discord application needs the Guilds, Guild Messages, Guild Message Reactions and Message Content intents.
+Discord application requirements:
 
-## Reset one channel
+```text
+Guilds intent
+Guild Messages intent
+Guild Message Reactions intent
+Message Content intent
+OAuth redirect: <NODEBB_URL>/auth/discord/callback
+```
 
-Delete the NodeBB category/content and Discord mappings for one channel so it can be imported again from scratch. User mappings are kept.
+## Local Development
+
+Run the stack from the sibling `nodebb-deploy` repository:
+
+```bash
+cd ../nodebb-deploy
+```
+
+Start NodeBB and PostgreSQL:
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build nodebb
+```
+
+Start/rebuild the worker:
+
+```bash
+docker compose -f docker-compose.dev.yml --profile discord-worker up -d --build discord_worker
+```
+
+Restart only the worker:
+
+```bash
+docker compose -f docker-compose.dev.yml restart discord_worker
+```
+
+Logs:
+
+```bash
+docker compose -f docker-compose.dev.yml logs -f --tail=100 nodebb
+docker compose -f docker-compose.dev.yml logs -f --tail=100 discord_worker
+```
+
+After changing plugin code, rebuild NodeBB. `nodebb-deploy/Dockerfile.dev` packs this repo with `npm pack` and installs the tarball into NodeBB.
+
+```bash
+docker compose -f docker-compose.dev.yml up -d --build nodebb
+```
+
+## Tests
+
+```bash
+npm test
+npm pack --dry-run
+```
+
+## Release
+
+The plugin and worker use the same version. The release tag must match both package files.
+
+```text
+package.json
+worker/package.json
+```
+
+Release example:
+
+```bash
+npm version 0.2.0 --no-git-tag-version
+npm --prefix worker version 0.2.0 --no-git-tag-version
+git add package.json worker/package.json
+git commit -m "Release discord nodebb sync 0.2.0"
+git tag v0.2.0
+git push origin main v0.2.0
+```
+
+The GitHub Actions release workflow:
+
+```text
+1. validates tag/package versions
+2. runs tests
+3. runs npm pack --dry-run
+4. publishes worker image to GHCR
+```
+
+`nodebb-deploy` installs the NodeBB plugin from the GitHub tag:
+
+```text
+https://github.com/nu31hackerspace/discord-nodebb-sync/archive/refs/tags/v${DISCORD_SYNC_VERSION}.tar.gz
+```
+
+Worker image:
+
+```text
+ghcr.io/nu31hackerspace/discord-nodebb-sync-worker:${DISCORD_SYNC_VERSION}
+```
+
+## Production Deploy
+
+After release `v0.2.0` is pushed and the worker image is built:
+
+```text
+nodebb-deploy GitHub variable:
+DISCORD_SYNC_VERSION=0.2.0
+```
+
+Then run the `nodebb-deploy` workflow. It builds the NodeBB image, installs the plugin from tag `v${DISCORD_SYNC_VERSION}`, and deploys the Swarm stack.
+
+## Reset One Channel
 
 Run from `nodebb-deploy`:
 
@@ -100,113 +182,4 @@ docker compose -f docker-compose.dev.yml --profile discord-worker run --rm disco
   node src/cli.js reset --channel <DISCORD_CHANNEL_ID>
 ```
 
-Then run `/forum-sync` for that Discord channel again.
-
-## Tests
-
-```bash
-npm test
-```
-
-## Local Docker development
-
-Local NodeBB, PostgreSQL and the worker are managed from the sibling `nodebb-deploy` repository. Do not run a standalone `docker build` for normal development.
-
-```bash
-cd ../nodebb-deploy
-```
-
-Start NodeBB + PostgreSQL:
-
-```bash
-docker compose -f docker-compose.dev.yml up -d --build nodebb
-```
-
-Start or rebuild/recreate the worker:
-
-```bash
-docker compose -f docker-compose.dev.yml --profile discord-worker up -d --build discord_worker
-```
-
-Restart the worker without rebuilding:
-
-```bash
-docker compose -f docker-compose.dev.yml restart discord_worker
-```
-
-Follow worker logs:
-
-```bash
-docker compose -f docker-compose.dev.yml logs -f --tail=100 discord_worker
-```
-
-After changing plugin code, rebuild/recreate NodeBB so the local npm package is packed and installed again:
-
-```bash
-docker compose -f docker-compose.dev.yml up -d --build nodebb
-```
-
-## Discord OAuth login
-
-`nodebb-deploy` installs and activates `nodebb-plugin-sso-oauth2-multiple` automatically. This plugin configures its `discord` strategy at NodeBB startup from:
-
-```text
-DISCORD_OAUTH_CLIENT_ID
-DISCORD_OAUTH_CLIENT_SECRET
-```
-
-The Discord application must have this redirect registered in Discord Developer Portal:
-
-```text
-<NODEBB_URL>/auth/discord/callback
-```
-
-Imported users are pre-linked in the exact mapping used by OAuth2 Multiple:
-
-```text
-Discord user id -> discordId:uid -> NodeBB uid
-```
-
-So `Log in with Discord` opens the already imported NodeBB account instead of creating a duplicate. Users who log in through Discord before their first imported message are also adopted by the importer later.
-
-## NodeBB plugin package
-
-This repository is a single Git repository containing both the NodeBB plugin and the Discord worker. The repository root is the NodeBB plugin package `nodebb-plugin-discord-sync`; `worker/` stays in the same repository and is excluded from the package by the `files` list in `package.json`.
-
-A normal NodeBB installation can install the plugin from a GitHub release tag:
-
-```bash
-npm install https://github.com/nu31hackerspace/discord-nodebb-sync/archive/refs/tags/v0.2.0.tar.gz
-./nodebb activate nodebb-plugin-discord-sync
-./nodebb build
-```
-
-Production `nodebb-deploy/Dockerfile` installs the plugin from the matching GitHub tag. Its build argument `DISCORD_SYNC_VERSION` selects tag `v${DISCORD_SYNC_VERSION}`. Development does not require tagging every edit: `Dockerfile.dev` runs `npm pack` against this repository and installs the resulting package tarball, so dev exercises the same package contents/layout that production installs from the tag.
-
-
-## Release
-
-The NodeBB plugin and Discord worker are one product and always use the same version.
-
-Set the same version in both package files:
-
-```text
-package.json
-worker/package.json
-```
-
-Create one Git tag, for example:
-
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-The `Release Discord NodeBB Sync` GitHub Actions workflow validates that the tag, plugin package version, and worker package version are identical. It then publishes the worker image; `nodebb-deploy` uses the same Git tag to install the NodeBB plugin:
-
-```text
-GHCR: ghcr.io/nu31hackerspace/discord-nodebb-sync-worker:0.2.0
-Git tag: v0.2.0, used by nodebb-deploy to install the NodeBB plugin
-```
-
-The worker image is published to GHCR with the repository `GITHUB_TOKEN`.
+This deletes the NodeBB category/content and sync mappings for one Discord channel. User mappings are kept.
