@@ -93,6 +93,19 @@ test('imports users/category/topic/reply and preserves timestamps/reply mapping'
   assert.equal(r.createdPosts, 2); assert.equal(h.users.length, 2); assert.equal(h.categories.length, 1); assert.equal(h.posts[0].timestamp, 1000); assert.equal(h.posts[1].timestamp, 2000); assert.equal(h.posts[1].toPid, h.posts[0].pid);
 });
 
+test('new NodeBB users get the current creation timestamp, not the Discord message timestamp', async () => {
+  const h = harness();
+  const before = Date.now();
+  await h.importer.importThread(payload);
+  const after = Date.now();
+  assert.equal(h.users.length, 2);
+  for (const user of h.users) {
+    assert.ok(user.timestamp >= before && user.timestamp <= after);
+    assert.notEqual(user.timestamp, 1000);
+    assert.notEqual(user.timestamp, 2000);
+  }
+});
+
 test('second import is idempotent', async () => {
   const h = harness(); await h.importer.importThread(payload); const r2 = await h.importer.importThread(payload);
   assert.equal(r2.createdPosts, 0); assert.equal(h.users.length, 2); assert.equal(h.posts.length, 2); assert.equal(h.categories.length, 1);
